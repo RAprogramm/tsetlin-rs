@@ -388,6 +388,62 @@ jobs:
           fi
 
   # ============================================================================
+  # STAGE 7: GitHub Release (main only, if version in changelog but no release)
+  # ============================================================================
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [publish, changelog]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Check and create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Get version from Cargo.toml
+          VERSION=$(grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)"/\1/')
+          TAG="v$VERSION"
+          echo "Version: $VERSION, Tag: $TAG"
+
+          # Check if version section exists in CHANGELOG
+          if ! grep -q "## $TAG" CHANGELOG.md; then
+            echo "Version $TAG not found in CHANGELOG.md, skipping release"
+            exit 0
+          fi
+
+          # Check if release already exists
+          if gh release view "$TAG" &>/dev/null; then
+            echo "Release $TAG already exists, skipping"
+            exit 0
+          fi
+
+          # Extract release notes from CHANGELOG (content between ## vX.Y.Z and next ## or EOF)
+          NOTES=$(awk "/^## $TAG$/,/^## v[0-9]/{if(/^## v[0-9]/ && !/^## $TAG$/)exit; print}" CHANGELOG.md | tail -n +2)
+
+          if [ -z "$NOTES" ]; then
+            NOTES="Release $TAG"
+          fi
+
+          echo "Creating release $TAG..."
+          echo "$NOTES" | gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file - \
+            --verify-tag || gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file - \
+            --target main
+
+          echo "Release $TAG created successfully!"
+
+  # ============================================================================
   # Final gate (for branch protection)
   # ============================================================================
 
