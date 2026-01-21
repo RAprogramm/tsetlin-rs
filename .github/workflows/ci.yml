@@ -219,65 +219,68 @@ jobs:
             const versionMatch = cargo.match(/^version\s*=\s*"([^"]+)"/m);
             const currentVersion = versionMatch ? `v${versionMatch[1]}` : 'v0.0.0';
 
-            // Read existing changelog
-            let existing = '';
-            let lastSHA = '';
+            // Parse existing changelog
+            let existingSHAs = new Set();
             let existingVersions = new Set();
-            let existingContent = '';
+            let unreleasedEntries = [];
+            let versionedSections = [];
 
             if (fs.existsSync('CHANGELOG.md')) {
-              existing = fs.readFileSync('CHANGELOG.md', 'utf8');
+              const existing = fs.readFileSync('CHANGELOG.md', 'utf8');
 
-              // Get first (most recent) SHA in changelog
-              const shaMatch = existing.match(/\[`([a-f0-9]{7})`\]/);
-              if (shaMatch) lastSHA = shaMatch[1];
-
-              // Get existing versions
-              const versionRegex = /^## (v[\d.]+)/gm;
-              let match;
-              while ((match = versionRegex.exec(existing)) !== null) {
-                existingVersions.add(match[1]);
+              // Extract all SHAs already in changelog
+              const shaRegex = /\[`([a-f0-9]{7})`\]/g;
+              let m;
+              while ((m = shaRegex.exec(existing)) !== null) {
+                existingSHAs.add(m[1]);
               }
 
-              // Keep content after Unreleased section
-              const versionedContent = existing.match(/\n## v[\d.]+[\s\S]*/);
-              if (versionedContent) existingContent = versionedContent[0];
+              // Extract Unreleased section entries
+              const unreleasedMatch = existing.match(/## Unreleased\n\n([\s\S]*?)(?=\n## v|$)/);
+              if (unreleasedMatch && unreleasedMatch[1].trim()) {
+                unreleasedEntries = unreleasedMatch[1].trim().split('\n\n').filter(e => e.startsWith('- ['));
+              }
+
+              // Extract all versioned sections (preserve completely)
+              const versionedMatch = existing.match(/\n(## v[\d.]+[\s\S]*)/);
+              if (versionedMatch) {
+                versionedSections = versionedMatch[1].split(/(?=\n## v[\d.]+)/).filter(s => s.trim());
+              }
+
+              // Track existing versions
+              const versionRegex = /^## (v[\d.]+)/gm;
+              while ((m = versionRegex.exec(existing)) !== null) {
+                existingVersions.add(m[1]);
+              }
             }
 
-            // Get commits since last documented SHA
-            const range = lastSHA ? `${lastSHA}..HEAD` : 'HEAD~100..HEAD';
-            let gitLog = '';
-            try {
-              gitLog = execSync(`git log ${range} --pretty=format:"%H|%h|%s|%an" --no-merges`, { encoding: 'utf8' });
-            } catch {
-              gitLog = execSync('git log -50 --pretty=format:"%H|%h|%s|%an" --no-merges', { encoding: 'utf8' });
-            }
-
+            // Get new commits not in changelog
+            const gitLog = execSync('git log --pretty=format:"%H|%h|%s|%an" --no-merges', { encoding: 'utf8' });
             const newCommits = [];
+
             for (const line of gitLog.split('\n').filter(l => l)) {
               const [sha, shaShort, message, author] = line.split('|');
+
+              // Skip if already documented or is changelog commit
+              if (existingSHAs.has(shaShort)) continue;
               if (message.includes('chore: update changelog')) continue;
+              if (message.includes('Merge pull request')) continue;
 
-              const { data: commitData } = await github.rest.repos.getCommit({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                ref: sha
-              });
+              try {
+                const { data: commitData } = await github.rest.repos.getCommit({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: sha
+                });
 
-              const ghAuthor = commitData.author;
-              newCommits.push({
-                shaShort,
-                message,
-                author: ghAuthor ? ghAuthor.login : author,
-                avatarUrl: ghAuthor ? ghAuthor.avatar_url : null,
-                authorUrl: ghAuthor ? ghAuthor.html_url : null,
-                url: commitData.html_url
-              });
-            }
+                const ghAuthor = commitData.author;
+                const avatar = ghAuthor?.avatar_url ? `<img src="${ghAuthor.avatar_url}" width="20" height="20" style="border-radius:50%"/> ` : '';
+                const authorLink = ghAuthor ? `[**${ghAuthor.login}**](${ghAuthor.html_url})` : `**${author}**`;
 
-            if (newCommits.length === 0) {
-              console.log('No new commits');
-              return;
+                newCommits.push(`- [\`${shaShort}\`](${commitData.html_url}) ${message}\n  ${avatar}${authorLink}`);
+              } catch (e) {
+                console.log(`Skip commit ${shaShort}: ${e.message}`);
+              }
             }
 
             // Build changelog
@@ -286,16 +289,29 @@ jobs:
             const isMain = context.ref === 'refs/heads/main';
             const isNewVersion = !existingVersions.has(currentVersion);
 
-            changelog += (isMain && isNewVersion) ? `## ${currentVersion}\n\n` : '## Unreleased\n\n';
-
-            for (const c of newCommits) {
-              const avatar = c.avatarUrl ? `<img src="${c.avatarUrl}" width="20" height="20" style="border-radius:50%"/> ` : '';
-              const authorLink = c.authorUrl ? `[**${c.author}**](${c.authorUrl})` : `**${c.author}**`;
-              changelog += `- [\`${c.shaShort}\`](${c.url}) ${c.message}\n  ${avatar}${authorLink}\n\n`;
+            if (isMain && isNewVersion) {
+              // Release: new commits + unreleased → new version section
+              changelog += `## ${currentVersion}\n\n`;
+              const allEntries = [...newCommits, ...unreleasedEntries];
+              if (allEntries.length > 0) {
+                changelog += allEntries.join('\n\n') + '\n\n';
+              }
+            } else {
+              // Not release: new commits prepend to unreleased
+              changelog += '## Unreleased\n\n';
+              const allUnreleased = [...newCommits, ...unreleasedEntries];
+              if (allUnreleased.length > 0) {
+                changelog += allUnreleased.join('\n\n') + '\n\n';
+              }
             }
 
-            changelog += existingContent;
+            // Append all existing versioned sections (NEVER delete)
+            if (versionedSections.length > 0) {
+              changelog += versionedSections.join('\n');
+            }
+
             fs.writeFileSync('CHANGELOG.md', changelog);
+            console.log(`Added ${newCommits.length} new commits`);
 
       - name: Commit Changelog
         run: |
