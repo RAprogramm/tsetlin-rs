@@ -4,14 +4,31 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
     commit-message:
-      prefix: "chore"
-      include: "scope"
-    open-pull-requests-limit: 5
+      prefix: "chore(deps)"
+    open-pull-requests-limit: 3
+    groups:
+      rust-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
     commit-message:
-      prefix: "ci"
+      prefix: "ci(deps)"
+    open-pull-requests-limit: 1
+    groups:
+      actions:
+        patterns:
+          - "*"
