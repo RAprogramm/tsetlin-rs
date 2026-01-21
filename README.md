@@ -504,6 +504,20 @@ negated: [u64; 2]  // 16 bytes
 
 </details>
 
+## In Memory of Michael Tsetlin
+
+<img src=".github/assets/tsetlin.png" alt="Michael Lvovich Tsetlin" width="150" align="right"/>
+
+**Mikhail Lvovich Tsetlin** (Михаил Львович Цетлин, 1924–1966) — Soviet mathematician and one of the founders of cybernetics in the USSR.
+
+A veteran of World War II who served as a scout and tank gunner, he later became a brilliant scientist. Working alongside I.M. Gelfand, he pioneered the theory of learning automata — finite state machines that learn optimal behavior through interaction with the environment.
+
+His work on collective automata behavior laid the theoretical foundation for what we now call the Tsetlin Machine. Despite his life being cut short at 41, his ideas continue to influence machine learning research today.
+
+> *This library honors his legacy by bringing his concepts to modern systems programming.*
+
+---
+
 ## Based On
 
 This Rust implementation is based on the original Tsetlin Machine algorithm:
