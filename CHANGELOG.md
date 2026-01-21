@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- [`8742f6f`](https://github.com/RAprogramm/tsetlin-rs/commit/8742f6f8e84fa615c8e072f90d7baec060325226) [#3](https://github.com/RAprogramm/tsetlin-rs/issues/3) 🔨 chore: start SoA layout implementation
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`a3039dc`](https://github.com/RAprogramm/tsetlin-rs/commit/a3039dc99abf35f8ee132edee3b538cf47ffeb4b) 🐛 fix: releases
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
 - [`a7bfeda`](https://github.com/RAprogramm/tsetlin-rs/commit/a7bfeda325c6aea4e26487e89a7d2ef4cb85f24b) 🔧 ci: auto-create GitHub release when version is in changelog
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
 
