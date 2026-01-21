@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- [`0a1d3b1`](https://github.com/RAprogramm/tsetlin-rs/commit/0a1d3b1509005cc8e943d8ad814cfb1d7189c9a9) 📝 add: photo
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`c0e96b2`](https://github.com/RAprogramm/tsetlin-rs/commit/c0e96b2020751391046361fdd36995c11655449c) 📚 docs: add Michael Tsetlin tribute section with photo
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
 - [`e97130b`](https://github.com/RAprogramm/tsetlin-rs/commit/e97130bdd0fbda6af137c2510856f21fa9af8410) 🔧 ci: changelog author as clickable avatar only
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
 
