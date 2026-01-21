@@ -1,6 +1,34 @@
+<a name="top"></a>
+
 # tsetlin-rs
 
+[![Crates.io](https://img.shields.io/crates/v/tsetlin-rs.svg)](https://crates.io/crates/tsetlin-rs)
+[![Documentation](https://docs.rs/tsetlin-rs/badge.svg)](https://docs.rs/tsetlin-rs)
+[![CI](https://github.com/RAprogramm/tsetlin-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/RAprogramm/tsetlin-rs/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/RAprogramm/tsetlin-rs/graph/badge.svg)](https://codecov.io/gh/RAprogramm/tsetlin-rs)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.92%2B-orange.svg)](https://www.rust-lang.org)
+
 A professional Rust implementation of the Tsetlin Machine algorithm for interpretable machine learning.
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Advanced Features](#advanced-features)
+- [Benchmarks](#benchmarks)
+- [Examples](#examples)
+- [Feature Flags](#feature-flags)
+- [API Overview](#api-overview)
+- [Algorithm Details](#algorithm-details)
+- [In Memory of Michael Tsetlin](#in-memory-of-michael-tsetlin)
+- [Based On](#based-on)
+- [License](#license)
+
+---
 
 ## Features
 
@@ -15,6 +43,10 @@ A professional Rust implementation of the Tsetlin Machine algorithm for interpre
 - **Serialization** - `serde` feature
 - **no_std Support** - Works without standard library
 
+<div align="right"><a href="#top">Back to top</a></div>
+
+---
+
 ## Installation
 
 ```toml
@@ -23,10 +55,18 @@ tsetlin-rs = "0.1"
 ```
 
 With all features:
+
 ```toml
 [dependencies]
 tsetlin-rs = { version = "0.1", features = ["parallel", "serde"] }
 ```
+
+> [!TIP]
+> Use `parallel` feature for multi-threaded training on large datasets.
+
+<div align="right"><a href="#top">Back to top</a></div>
+
+---
 
 ## Quick Start
 
@@ -49,6 +89,13 @@ tm.fit(&x, &y, 200, 42);
 let accuracy = tm.evaluate(&x, &y);
 println!("Accuracy: {:.1}%", accuracy * 100.0);
 ```
+
+> [!NOTE]
+> The last parameter in `fit()` is a random seed for reproducibility.
+
+<div align="right"><a href="#top">Back to top</a></div>
+
+---
 
 ## Advanced Features
 
@@ -85,7 +132,12 @@ tm.fit(&x_train, &y_train, 100, 42);
 | Complex patterns (parity) | 49.1% | **50.5%** | Advanced |
 | Simple patterns, low noise | **82.8%** | 81.1% | Standard |
 
-Run benchmark: `cargo run --release --example benchmark_advanced`
+> [!IMPORTANT]
+> Run benchmark to compare: `cargo run --release --example benchmark_advanced`
+
+<div align="right"><a href="#top">Back to top</a></div>
+
+---
 
 ## Benchmarks
 
@@ -115,6 +167,13 @@ Run benchmark: `cargo run --release --example benchmark_advanced`
 - `SmallClause<N>` - const generics, stack allocation
 - `div_ceil()` - Rust 1.73+ intrinsic
 
+> [!TIP]
+> Use `BitwiseClause` for datasets with 64+ features for maximum performance.
+
+<div align="right"><a href="#top">Back to top</a></div>
+
+---
+
 ## Examples
 
 ```bash
@@ -122,6 +181,10 @@ cargo run --example xor
 cargo run --example iris
 cargo run --release --example benchmark_advanced
 ```
+
+<div align="right"><a href="#top">Back to top</a></div>
+
+---
 
 ## Feature Flags
 
@@ -131,6 +194,13 @@ cargo run --release --example benchmark_advanced
 | `simd` | SIMD optimization (requires nightly) |
 | `parallel` | Parallel training with rayon |
 | `serde` | Serialization support |
+
+> [!WARNING]
+> The `simd` feature requires Rust nightly toolchain.
+
+<div align="right"><a href="#top">Back to top</a></div>
+
+---
 
 ## API Overview
 
@@ -145,7 +215,11 @@ cargo run --release --example benchmark_advanced
 | `SmallTsetlinMachine<N, C>` | Compile-time optimized TM |
 | `AdvancedOptions` | Weighted clauses, adaptive T, pruning |
 
+<div align="right"><a href="#top">Back to top</a></div>
+
 ---
+
+## Algorithm Details
 
 <details>
 <summary><strong>Tsetlin Machine Algorithm</strong></summary>
@@ -430,11 +504,11 @@ SmallTsetlinMachine<N, C> {
 
 | Feature | Clause | SmallClause | BitwiseClause | SmallBitwise |
 |---------|--------|-------------|---------------|--------------|
-| Heap-free | ❌ | ✅ | ❌ | ✅ |
-| Serde | ✅ | ❌ | ✅ | ❌ |
-| no_std | ✅ | ✅ | ✅ | ✅ |
+| Heap-free | :x: | :white_check_mark: | :x: | :white_check_mark: |
+| Serde | :white_check_mark: | :x: | :white_check_mark: | :x: |
+| no_std | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 | Best for N | any | ≤64 | ≥64 | 64-256 |
-| Loop unroll | ❌ | ✅ | ❌ | ✅ |
+| Loop unroll | :x: | :white_check_mark: | :x: | :white_check_mark: |
 
 </details>
 
@@ -504,6 +578,10 @@ negated: [u64; 2]  // 16 bytes
 
 </details>
 
+<div align="right"><a href="#top">Back to top</a></div>
+
+---
+
 ## In Memory of Michael Tsetlin
 
 <img src=".github/assets/tsetlin.png" alt="Michael Lvovich Tsetlin" width="150" align="right"/>
@@ -516,14 +594,17 @@ His work on collective automata behavior laid the theoretical foundation for wha
 
 > *This library honors his legacy by bringing his concepts to modern systems programming.*
 
+<div align="right"><a href="#top">Back to top</a></div>
+
 ---
 
 ## Based On
 
 This Rust implementation is based on the original Tsetlin Machine algorithm:
 
-**Paper:** [The Tsetlin Machine - A Game Theoretic Bandit Driven Approach to Optimal Pattern Recognition with Propositional Logic](https://arxiv.org/abs/1804.01508)
-*Ole-Christoffer Granmo, 2018*
+> [!NOTE]
+> **Paper:** [The Tsetlin Machine - A Game Theoretic Bandit Driven Approach to Optimal Pattern Recognition with Propositional Logic](https://arxiv.org/abs/1804.01508)
+> *Ole-Christoffer Granmo, 2018*
 
 **Original C Implementation:** [cair/TsetlinMachineC](https://github.com/cair/TsetlinMachineC)
 
@@ -532,6 +613,12 @@ This Rust implementation is based on the original Tsetlin Machine algorithm:
 - [cair/pyTsetlinMachine](https://github.com/cair/pyTsetlinMachine) — Extended Python library
 - [cair/tmu](https://github.com/cair/tmu) — Unified TM with CUDA support
 
+<div align="right"><a href="#top">Back to top</a></div>
+
+---
+
 ## License
 
 MIT
+
+<div align="right"><a href="#top">Back to top</a></div>
