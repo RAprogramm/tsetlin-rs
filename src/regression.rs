@@ -132,6 +132,6 @@ mod tests {
         let tm = Regressor::new(config, 10);
         let p = tm.predict(&[1, 0, 1, 0]);
 
-        assert!(p >= -10 && p <= 10);
+        assert!((-10..=10).contains(&p));
     }
 }

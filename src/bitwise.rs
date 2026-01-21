@@ -3,7 +3,7 @@
 //! Processes 64 features per CPU instruction using bitmasks.
 
 #[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
