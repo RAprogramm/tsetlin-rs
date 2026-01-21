@@ -10,6 +10,7 @@
 <p align="center">
   <a href="https://codecov.io/gh/RAprogramm/tsetlin-rs"><img src="https://img.shields.io/codecov/c/github/RAprogramm/tsetlin-rs?style=for-the-badge&logo=codecov&logoColor=white&color=f01f7a" alt="codecov"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge&logo=opensourceinitiative&logoColor=white" alt="License"/></a>
+  <a href="https://api.reuse.software/info/github.com/RAprogramm/tsetlin-rs"><img src="https://img.shields.io/reuse/compliance/github.com%2FRAprogramm%2Ftsetlin-rs?style=for-the-badge&logo=reuse&logoColor=white" alt="REUSE"/></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/rust-1.92+-93450a?style=for-the-badge&logo=rust&logoColor=white" alt="Rust"/></a>
 </p>
 

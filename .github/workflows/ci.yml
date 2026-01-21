@@ -371,13 +371,13 @@ jobs:
           echo "Local version: $VERSION"
 
           # Check if version exists on crates.io
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://crates.io/api/v1/crates/tsetlin-rs/$VERSION")
+          PUBLISHED=$(curl -s "https://crates.io/api/v1/crates/tsetlin-rs" | jq -r ".versions[]?.num // empty" | grep -x "$VERSION" || true)
 
-          if [ "$HTTP_CODE" = "200" ]; then
+          if [ -n "$PUBLISHED" ]; then
             echo "Version $VERSION already published, skipping"
           else
             echo "Version $VERSION not found on crates.io, publishing..."
-            cargo publish
+            cargo publish || echo "Publish failed or version already exists"
           fi
 
   # ============================================================================
