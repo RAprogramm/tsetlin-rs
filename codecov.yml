@@ -1,0 +1,93 @@
+# SPDX-FileCopyrightText: 2026 RAprogramm <andrey.rozanov.vl@gmail.com>
+# SPDX-License-Identifier: MIT
+
+codecov:
+  require_ci_to_pass: true
+
+coverage:
+  precision: 2
+  round: down
+  range: "70...100"
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 5%
+        if_ci_failed: error
+    patch:
+      default:
+        target: 80%
+        threshold: 5%
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: true
+  require_base: false
+  require_head: true
+
+ignore:
+  - "benches/**"
+  - "examples/**"
+  - "tests/**"
+
+flag_management:
+  default_rules:
+    carryforward: true
+    statuses:
+      - type: project
+        target: auto
+        threshold: 5%
+      - type: patch
+        target: 80%
+  individual_flags:
+    - name: core
+      paths:
+        - src/lib.rs
+        - src/automaton.rs
+        - src/clause.rs
+        - src/feedback.rs
+        - src/config.rs
+        - src/error.rs
+      carryforward: true
+      statuses:
+        - type: project
+          target: auto
+        - type: patch
+          target: 80%
+    - name: models
+      paths:
+        - src/binary.rs
+        - src/multiclass.rs
+        - src/regression.rs
+        - src/convolutional.rs
+        - src/model.rs
+        - src/training.rs
+      carryforward: true
+      statuses:
+        - type: project
+          target: auto
+        - type: patch
+          target: 80%
+    - name: optimizations
+      paths:
+        - src/bitwise.rs
+        - src/small.rs
+        - src/simd.rs
+        - src/parallel.rs
+      carryforward: true
+      statuses:
+        - type: project
+          target: auto
+        - type: patch
+          target: 70%
+    - name: utils
+      paths:
+        - src/utils.rs
+        - src/rule.rs
+      carryforward: true
+      statuses:
+        - type: project
+          target: auto
+        - type: patch
+          target: 70%
