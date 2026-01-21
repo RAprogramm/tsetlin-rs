@@ -2,7 +2,6 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
 
 env:
@@ -426,7 +425,11 @@ jobs:
           fi
 
           # Extract release notes from CHANGELOG (content between ## vX.Y.Z and next ## or EOF)
-          NOTES=$(awk "/^## $TAG$/,/^## v[0-9]/{if(/^## v[0-9]/ && !/^## $TAG$/)exit; print}" CHANGELOG.md | tail -n +2)
+          NOTES=$(awk -v tag="$TAG" '
+            $0 ~ "^## " tag "$" { found=1; next }
+            found && /^## v[0-9]/ { exit }
+            found { print }
+          ' CHANGELOG.md)
 
           if [ -z "$NOTES" ]; then
             NOTES="Release $TAG"

@@ -16,6 +16,8 @@
 - [`bcd0c93`](https://github.com/RAprogramm/tsetlin-rs/commit/bcd0c9309faffda8940e9d21ccfe98c02144a417) 🐛 fix: changelog generation logic and restructure CHANGELOG.md
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
 
+## v0.1.0
+
 - [`75dfee6`](https://github.com/RAprogramm/tsetlin-rs/commit/75dfee6ab498600051583023098ded8fa64595e6) 🐛 fix: improve crates.io version check and add REUSE badge
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
 
@@ -142,8 +144,5 @@
 - [`a0fafa4`](https://github.com/RAprogramm/tsetlin-rs/commit/a0fafa4b7d7d08dc5faa7eafdcece2d584c8764a) Initial commit: Tsetlin Machine Rust implementation
   <img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%"/> [**RAprogramm**](https://github.com/RAprogramm)
 
-## v0.1.0
-
 - [`e73c2cd`](https://github.com/RAprogramm/tsetlin-rs/commit/e73c2cda7debd1d5dfd03c483d3450cb5e009df3) Create SECURITY.md
   <img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%"/> [**RAprogramm**](https://github.com/RAprogramm)
-
