@@ -10,7 +10,7 @@
 <p align="center">
   <a href="https://codecov.io/gh/RAprogramm/tsetlin-rs"><img src="https://img.shields.io/codecov/c/github/RAprogramm/tsetlin-rs?style=for-the-badge&logo=codecov&logoColor=white&color=f01f7a" alt="codecov"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge&logo=opensourceinitiative&logoColor=white" alt="License"/></a>
-  <a href="https://api.reuse.software/info/github.com/RAprogramm/tsetlin-rs"><img src="https://api.reuse.software/badge/github.com/RAprogramm/tsetlin-rs" alt="REUSE status"/></a>
+  <a href="https://api.reuse.software/info/github.com/RAprogramm/tsetlin-rs"><img src="https://img.shields.io/badge/REUSE-compliant-4cc61e?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6bS0yIDE1bC01LTUgMS40MS0xLjQxTDEwIDE0LjE3bDcuNTktNy41OUwxOSA4bC05IDl6Ii8+PC9zdmc+" alt="REUSE"/></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/rust-1.92+-93450a?style=for-the-badge&logo=rust&logoColor=white" alt="Rust"/></a>
 </p>
 
