@@ -4,6 +4,18 @@
 
 ## Unreleased
 
+- [`e97130b`](https://github.com/RAprogramm/tsetlin-rs/commit/e97130bdd0fbda6af137c2510856f21fa9af8410) 🔧 ci: changelog author as clickable avatar only
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`f21c76d`](https://github.com/RAprogramm/tsetlin-rs/commit/f21c76d6de19ae6d55ab84c37cb82a14b4472ae3) 🔧 ci: cleaner changelog format - emoji + type
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`73f7f57`](https://github.com/RAprogramm/tsetlin-rs/commit/73f7f575a527e1a4cc1f91bef22a6306ab89db95) 📚 docs: add references to original paper and C implementation
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`acdfc0e`](https://github.com/RAprogramm/tsetlin-rs/commit/acdfc0e1a58e5ac4af13e51fdeb43b991d004edd) 🔧 ci: changelog with issue links and type badges
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
 - [`75cf317`](https://github.com/RAprogramm/tsetlin-rs/commit/75cf317ade05faad5ca4625e41465e18a4270f35) 🔧 **ci(deps):** bump actions/github-script from 7 to 8 in the actions group
   <img src="https://avatars.githubusercontent.com/in/29110?v=4" width="20" height="20" style="border-radius:50%"/> [**dependabot[bot]**](https://github.com/apps/dependabot)
 
