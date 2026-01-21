@@ -5,18 +5,27 @@
 //!
 //! # Models
 //!
-//! - [`TsetlinMachine`] - Binary classification
+//! - [`TsetlinMachine`] - Binary classification (dynamic)
+//! - [`SmallTsetlinMachine`] - Binary classification (compile-time optimized)
 //! - [`MultiClass`] - Multi-class classification (one-vs-all)
 //! - [`Regressor`] - Regression
 //! - [`Convolutional`] - Image classification with patch extraction
+//!
+//! # Clause Types
+//!
+//! | Type | Heap | Best For |
+//! |------|------|----------|
+//! | [`Clause`] | Yes | Dynamic dimensions, serde |
+//! | [`SmallClause`] | No | N ≤ 64, maximum speed |
+//! | [`BitwiseClause`] | Yes | N ≥ 64, 25-92x speedup |
+//! | [`SmallBitwiseClause`] | No | 64-256 features, no heap |
 //!
 //! # Advanced Features
 //!
 //! - **Weighted Clauses** - Clauses learn weights based on accuracy
 //! - **Adaptive Threshold** - Dynamic T adjustment during training
 //! - **Clause Pruning** - Automatic reset of dead/ineffective clauses
-//! - [`BitwiseClause`] - 64 features per CPU instruction (25-92x speedup)
-//! - [`SmallClause`] - Stack-allocated clauses with const generics
+//! - **Const Generics** - Zero-allocation stack types with loop unrolling
 //!
 //! # Feature Flags
 //!
