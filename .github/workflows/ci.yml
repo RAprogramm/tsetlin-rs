@@ -277,7 +277,24 @@ jobs:
                 const avatar = ghAuthor?.avatar_url ? `<img src="${ghAuthor.avatar_url}" width="20" height="20" style="border-radius:50%"/> ` : '';
                 const authorLink = ghAuthor ? `[**${ghAuthor.login}**](${ghAuthor.html_url})` : `**${author}**`;
 
-                newCommits.push(`- [\`${shaShort}\`](${commitData.html_url}) ${message}\n  ${avatar}${authorLink}`);
+                // Convert #123 to issue/PR links
+                const repoUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
+                let linkedMessage = message.replace(/#(\d+)/g, `[#$1](${repoUrl}/issues/$1)`);
+
+                // Parse conventional commit and add type badge
+                const typeMatch = linkedMessage.match(/^(\[#\d+\]\([^)]+\)\s+)?(\w+)(\([^)]+\))?:\s*(.+)$/);
+                if (typeMatch) {
+                  const [, issue = '', type, scope = '', desc] = typeMatch;
+                  const types = {
+                    feat: '✨', fix: '🐛', docs: '📚', style: '💎',
+                    refactor: '♻️', perf: '⚡', test: '🧪', build: '📦',
+                    ci: '🔧', chore: '🔨', revert: '⏪'
+                  };
+                  const emoji = types[type] || '📝';
+                  linkedMessage = `${issue}${emoji} **${type}${scope}:** ${desc}`;
+                }
+
+                newCommits.push(`- [\`${shaShort}\`](${commitData.html_url}) ${linkedMessage}\n  ${avatar}${authorLink}`);
               } catch (e) {
                 console.log(`Skip commit ${shaShort}: ${e.message}`);
               }
