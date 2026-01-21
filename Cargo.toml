@@ -1,0 +1,53 @@
+[package]
+name = "tsetlin-rs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+authors = ["RAprogramm <andrey.rozanov.vl@gmail.com>"]
+description = "A professional Rust implementation of the Tsetlin Machine algorithm"
+license = "MIT"
+repository = "https://github.com/RAprogramm/tsetlin-rs"
+keywords = [
+  "machine-learning",
+  "tsetlin-machine",
+  "classification",
+  "interpretable-ml",
+]
+categories = ["science", "algorithms"]
+
+[features]
+default = ["std"]
+std = []
+simd = ["std"]
+parallel = ["std", "rayon"]
+serde = ["dep:serde"]
+full = ["simd", "parallel", "serde"]
+
+[dependencies]
+rand = { version = "0.9", default-features = false, features = [
+  "small_rng",
+  "thread_rng",
+] }
+rand_xoshiro = "0.7"
+
+[dependencies.serde]
+version = "1.0"
+optional = true
+features = ["derive"]
+
+[dependencies.rayon]
+version = "1.10"
+optional = true
+
+[dev-dependencies]
+criterion = "0.8"
+
+[[bench]]
+name = "benchmarks"
+harness = false
+
+[[example]]
+name = "xor"
+
+[[example]]
+name = "iris"
