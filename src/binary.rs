@@ -1,4 +1,4 @@
-//! Binary classification Tsetlin Machine.
+//! Binary classification Tsetlin Machine with weighted clauses and adaptive threshold.
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
@@ -14,7 +14,40 @@ use crate::{Clause, Config, Rule};
 
 /// # Overview
 ///
-/// Binary classification Tsetlin Machine.
+/// Configuration for advanced training features.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct AdvancedOptions {
+    pub adaptive_t:      bool,
+    pub t_min:           f32,
+    pub t_max:           f32,
+    pub t_lr:            f32,
+    pub weight_lr:       f32,
+    pub weight_min:      f32,
+    pub weight_max:      f32,
+    pub prune_threshold: u32,
+    pub prune_weight:    f32
+}
+
+impl Default for AdvancedOptions {
+    fn default() -> Self {
+        Self {
+            adaptive_t:      false,
+            t_min:           5.0,
+            t_max:           50.0,
+            t_lr:            0.1,
+            weight_lr:       0.05,
+            weight_min:      0.1,
+            weight_max:      2.0,
+            prune_threshold: 0,
+            prune_weight:    0.0
+        }
+    }
+}
+
+/// # Overview
+///
+/// Binary classification Tsetlin Machine with weighted clauses and adaptive threshold.
 ///
 /// # Examples
 ///
@@ -28,10 +61,11 @@ use crate::{Clause, Config, Rule};
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TsetlinMachine {
-    clauses:   Vec<Clause>,
-    config:    Config,
-    threshold: i32,
-    inv_2t:    f32
+    clauses:  Vec<Clause>,
+    config:   Config,
+    t:      f32,
+    t_base: f32,
+    advanced: AdvancedOptions
 }
 
 impl TsetlinMachine {
@@ -46,19 +80,53 @@ impl TsetlinMachine {
             })
             .collect();
 
+        let t = threshold as f32;
         Self {
             clauses,
             config,
-            threshold,
-            inv_2t: 1.0 / (2.0 * threshold as f32)
+            t,
+            t_base: t,
+            advanced: AdvancedOptions::default()
         }
     }
 
     /// # Overview
     ///
-    /// Sum of clause votes for input x.
+    /// Creates machine with advanced options.
+    pub fn with_advanced(config: Config, threshold: i32, advanced: AdvancedOptions) -> Self {
+        let mut tm = Self::new(config, threshold);
+        tm.advanced = advanced;
+        tm
+    }
+
+    /// # Overview
+    ///
+    /// Current threshold value (may differ from base if adaptive).
     #[inline]
-    pub fn sum_votes(&self, x: &[u8]) -> i32 {
+    pub fn threshold(&self) -> f32 {
+        self.t
+    }
+
+    /// # Overview
+    ///
+    /// Base threshold (initial value).
+    #[inline]
+    pub fn threshold_base(&self) -> f32 {
+        self.t_base
+    }
+
+    /// # Overview
+    ///
+    /// Resets threshold to base value.
+    pub fn reset_threshold(&mut self) {
+        self.t = self.t_base;
+    }
+
+    /// # Overview
+    ///
+    /// Sum of weighted clause votes for input x.
+    #[inline]
+    pub fn sum_votes(&self, x: &[u8]) -> f32 {
         self.clauses.iter().map(|c| c.vote(x)).sum()
     }
 
@@ -67,7 +135,7 @@ impl TsetlinMachine {
     /// Predicts class (0 or 1).
     #[inline(always)]
     pub fn predict(&self, x: &[u8]) -> u8 {
-        if self.sum_votes(x) >= 0 { 1 } else { 0 }
+        if self.sum_votes(x) >= 0.0 { 1 } else { 0 }
     }
 
     /// # Overview
@@ -80,18 +148,31 @@ impl TsetlinMachine {
 
     /// # Overview
     ///
-    /// Trains on single example.
+    /// Trains on single example with tracking.
     #[inline]
     pub fn train_one<R: Rng>(&mut self, x: &[u8], y: u8, rng: &mut R) {
-        let sum = self.sum_votes(x).clamp(-self.threshold, self.threshold);
-        let t = self.threshold as f32;
+        let sum = self.sum_votes(x).clamp(-self.t, self.t);
+        let inv_2t = 1.0 / (2.0 * self.t);
         let s = self.config.s;
 
-        let prob = if y == 1 { (t - sum as f32) * self.inv_2t } else { (t + sum as f32) * self.inv_2t };
+        let prob = if y == 1 {
+            (self.t - sum) * inv_2t
+        } else {
+            (self.t + sum) * inv_2t
+        };
+
+        let prediction = if sum >= 0.0 { 1 } else { 0 };
+        let correct = prediction == y;
 
         for clause in &mut self.clauses {
-            let fires = clause.evaluate(x);
+            let fires = clause.evaluate_tracked(x);
             let p = clause.polarity();
+
+            // Record outcome for weight learning
+            if fires {
+                let clause_correct = (p == 1 && y == 1) || (p == -1 && y == 0);
+                clause.record_outcome(clause_correct);
+            }
 
             if y == 1 {
                 if p == 1 && rng.random::<f32>() <= prob {
@@ -104,6 +185,61 @@ impl TsetlinMachine {
             } else if p == 1 && fires && rng.random::<f32>() <= prob {
                 type_ii(clause, x);
             }
+        }
+
+        // Adaptive threshold adjustment
+        if self.advanced.adaptive_t {
+            let adj = if correct {
+                self.advanced.t_lr
+            } else {
+                -self.advanced.t_lr
+            };
+            self.t = (self.t + adj).clamp(self.advanced.t_min, self.advanced.t_max);
+        }
+    }
+
+    /// # Overview
+    ///
+    /// Updates clause weights. Call at end of epoch.
+    pub fn update_weights(&mut self) {
+        let lr = self.advanced.weight_lr;
+        let min = self.advanced.weight_min;
+        let max = self.advanced.weight_max;
+
+        for clause in &mut self.clauses {
+            clause.update_weight(lr, min, max);
+        }
+    }
+
+    /// # Overview
+    ///
+    /// Prunes dead clauses (low activation or weight).
+    pub fn prune_dead_clauses(&mut self) {
+        let min_act = self.advanced.prune_threshold;
+        let min_wt = self.advanced.prune_weight;
+
+        if min_act == 0 && min_wt == 0.0 {
+            return;
+        }
+
+        for clause in &mut self.clauses {
+            if clause.is_dead(min_act, min_wt) {
+                // Reset dead clause to fresh state
+                *clause = Clause::new(
+                    self.config.n_features,
+                    self.config.n_states,
+                    clause.polarity()
+                );
+            }
+        }
+    }
+
+    /// # Overview
+    ///
+    /// Resets activation counters. Call at start of epoch.
+    pub fn reset_activations(&mut self) {
+        for clause in &mut self.clauses {
+            clause.reset_activations();
         }
     }
 
@@ -125,12 +261,20 @@ impl TsetlinMachine {
         let mut epochs_run = 0;
 
         for epoch in 0..opts.epochs {
+            self.reset_activations();
+
             if opts.shuffle {
                 crate::utils::shuffle(&mut indices, &mut rng);
             }
+
             for &i in &indices {
                 self.train_one(&x[i], y[i], &mut rng);
             }
+
+            // End of epoch: update weights and prune
+            self.update_weights();
+            self.prune_dead_clauses();
+
             epochs_run = epoch + 1;
 
             if let Some(ref mut t) = tracker
@@ -159,6 +303,20 @@ impl TsetlinMachine {
     pub fn rules(&self) -> Vec<Rule> {
         self.clauses.iter().map(Rule::from_clause).collect()
     }
+
+    /// # Overview
+    ///
+    /// Returns clause weights for inspection.
+    pub fn clause_weights(&self) -> Vec<f32> {
+        self.clauses.iter().map(|c| c.weight()).collect()
+    }
+
+    /// # Overview
+    ///
+    /// Returns clause activation counts.
+    pub fn clause_activations(&self) -> Vec<u32> {
+        self.clauses.iter().map(|c| c.activations()).collect()
+    }
 }
 
 #[cfg(test)]
@@ -185,5 +343,28 @@ mod tests {
         let xs = vec![vec![0, 0], vec![1, 1]];
         let preds = tm.predict_batch(&xs);
         assert_eq!(preds.len(), 2);
+    }
+
+    #[test]
+    fn weighted_clauses() {
+        let config = Config::builder().clauses(10).features(2).build().unwrap();
+        let tm = TsetlinMachine::new(config, 5);
+
+        let weights = tm.clause_weights();
+        assert!(weights.iter().all(|&w| (w - 1.0).abs() < 0.001));
+    }
+
+    #[test]
+    fn adaptive_threshold() {
+        let config = Config::builder().clauses(10).features(2).build().unwrap();
+        let opts = AdvancedOptions {
+            adaptive_t: true,
+            t_min: 3.0,
+            t_max: 20.0,
+            t_lr: 0.5,
+            ..Default::default()
+        };
+        let tm = TsetlinMachine::with_advanced(config, 10, opts);
+        assert!((tm.threshold() - 10.0).abs() < 0.001);
     }
 }

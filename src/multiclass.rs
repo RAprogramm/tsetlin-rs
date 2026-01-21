@@ -65,7 +65,7 @@ impl MultiClass {
     /// # Overview
     ///
     /// Vote sums per class.
-    pub fn class_votes(&self, x: &[u8]) -> Vec<i32> {
+    pub fn class_votes(&self, x: &[u8]) -> Vec<f32> {
         self.clauses
             .iter()
             .map(|cls| cls.iter().map(|c| c.vote(x)).sum())
@@ -79,7 +79,7 @@ impl MultiClass {
         self.class_votes(x)
             .iter()
             .enumerate()
-            .max_by_key(|(_, v)| *v)
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
             .map(|(i, _)| i)
             .unwrap_or(0)
     }
@@ -93,7 +93,7 @@ impl MultiClass {
 
         for (class_idx, class_clauses) in self.clauses.iter_mut().enumerate() {
             let is_target = class_idx == y;
-            let sum = votes[class_idx].clamp(-self.threshold, self.threshold) as f32;
+            let sum = votes[class_idx].clamp(-t, t);
 
             for clause in class_clauses {
                 let fires = clause.evaluate(x);

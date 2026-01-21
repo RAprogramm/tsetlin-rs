@@ -54,16 +54,16 @@ impl Convolutional {
         }
     }
 
-    pub fn class_votes(&self, image: &[u8]) -> Vec<i32> {
+    pub fn class_votes(&self, image: &[u8]) -> Vec<f32> {
         let (rows, cols, ps, w) = self.patch_dims(image);
         self.clauses
             .iter()
             .map(|cls| {
-                let mut sum = 0i32;
+                let mut sum = 0.0f32;
                 for r in 0..rows {
                     for c in 0..cols {
                         let patch = extract_patch(image, r, c, ps, w);
-                        sum += cls.iter().map(|cl| cl.vote(&patch)).sum::<i32>();
+                        sum += cls.iter().map(|cl| cl.vote(&patch)).sum::<f32>();
                     }
                 }
                 sum
@@ -75,7 +75,7 @@ impl Convolutional {
         self.class_votes(image)
             .iter()
             .enumerate()
-            .max_by_key(|(_, v)| *v)
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
             .map(|(i, _)| i)
             .unwrap_or(0)
     }
@@ -98,7 +98,7 @@ impl Convolutional {
 
         for (ci, cls) in self.clauses.iter_mut().enumerate() {
             let is_target = ci == label;
-            let sum = votes[ci].clamp(-self.threshold, self.threshold) as f32;
+            let sum = votes[ci].clamp(-t, t);
 
             for r in 0..rows {
                 for c in 0..cols {

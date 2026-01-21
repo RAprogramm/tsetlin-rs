@@ -52,7 +52,7 @@ pub mod parallel;
 pub mod simd;
 
 pub use automaton::Automaton;
-pub use binary::TsetlinMachine;
+pub use binary::{AdvancedOptions, TsetlinMachine};
 pub use bitwise::{BitwiseClause, pack_batch, pack_input};
 pub use clause::Clause;
 pub use config::{Config, ConfigBuilder};

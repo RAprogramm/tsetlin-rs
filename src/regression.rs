@@ -56,7 +56,7 @@ impl Regressor {
     /// # Overview
     ///
     /// Raw sum of clause votes.
-    pub fn sum_votes(&self, x: &[u8]) -> i32 {
+    pub fn sum_votes(&self, x: &[u8]) -> f32 {
         self.clauses.iter().map(|c| c.vote(x)).sum()
     }
 
@@ -64,7 +64,8 @@ impl Regressor {
     ///
     /// Predicts integer value clamped to threshold range.
     pub fn predict(&self, x: &[u8]) -> i32 {
-        self.sum_votes(x).clamp(-self.threshold, self.threshold)
+        let t = self.threshold as f32;
+        self.sum_votes(x).clamp(-t, t).round() as i32
     }
 
     /// # Overview
