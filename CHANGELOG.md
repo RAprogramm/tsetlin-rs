@@ -4,6 +4,21 @@
 
 ## Unreleased
 
+- [`de54204`](https://github.com/RAprogramm/tsetlin-rs/commit/de5420471a8ffa0d232d4279e7a69326f400e37f) 🔨 chore: add REUSE license files
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`25c5823`](https://github.com/RAprogramm/tsetlin-rs/commit/25c58230940a6fdd801b28e48dd4753149941d07) 🔨 chore: fix REUSE.toml with package metadata
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`13c7adf`](https://github.com/RAprogramm/tsetlin-rs/commit/13c7adf49134c9f19be4f97c9af91e9cfc51b225) 🔨 chore: update codecov.yml paths and add reuse.toml
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`dbc9d65`](https://github.com/RAprogramm/tsetlin-rs/commit/dbc9d657e269663e2a56f2da8ca32e68b236a55f) 📚 docs: modern badge styling with logos
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`3eb323c`](https://github.com/RAprogramm/tsetlin-rs/commit/3eb323ca0af6c2244d944b89e3e870c6202b0c81) 📚 docs: improve README with TOC, badges, callouts, back-to-top links
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
 - [`cc2f365`](https://github.com/RAprogramm/tsetlin-rs/commit/cc2f365eef20d4f0abba8a9ca6392bee4ffa3c66) 🔧 ci: use CRATESIO secret name
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
 
