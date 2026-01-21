@@ -137,7 +137,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: test-${{ matrix.os }}-${{ matrix.features || 'default' }}
+          prefix-key: test-${{ matrix.os }}
           shared-key: stable
           cache-targets: true
 
