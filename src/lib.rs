@@ -79,5 +79,9 @@ pub use model::{TsetlinModel, VotingModel};
 pub use multiclass::MultiClass;
 pub use regression::Regressor;
 pub use rule::Rule;
-pub use small::{Clause2, Clause4, Clause8, Clause16, Clause32, SmallClause};
+pub use small::{
+    BitwiseClause64, BitwiseClause128, BitwiseClause256, Clause2, Clause4, Clause8, Clause16,
+    Clause32, Clause64, SmallBitwiseClause, SmallClause, SmallTsetlinMachine, TM2x20, TM4x40,
+    TM8x80, TM16x160, pack_input_small
+};
 pub use training::{EarlyStop, FitOptions, FitResult};
