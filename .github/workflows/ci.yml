@@ -228,6 +228,7 @@ jobs:
             const cargo = fs.readFileSync('Cargo.toml', 'utf8');
             const versionMatch = cargo.match(/^version\s*=\s*"([^"]+)"/m);
             const currentVersion = versionMatch ? `v${versionMatch[1]}` : 'v0.0.0';
+            console.log(`Current version: ${currentVersion}`);
 
             // Parse existing changelog
             let existingSHAs = new Set();
@@ -238,7 +239,7 @@ jobs:
             if (fs.existsSync('CHANGELOG.md')) {
               const existing = fs.readFileSync('CHANGELOG.md', 'utf8');
 
-              // Extract all SHAs already in changelog
+              // Extract all SHAs already in changelog (7-char short SHA)
               const shaRegex = /\[`([a-f0-9]{7})`\]/g;
               let m;
               while ((m = shaRegex.exec(existing)) !== null) {
@@ -264,14 +265,18 @@ jobs:
               }
             }
 
-            // Get new commits not in changelog
-            const gitLog = execSync('git log --pretty=format:"%H|%h|%s|%an" --no-merges', { encoding: 'utf8' });
+            console.log(`Existing versions: ${[...existingVersions].join(', ') || 'none'}`);
+            console.log(`Unreleased entries: ${unreleasedEntries.length}`);
+            console.log(`Existing SHAs: ${existingSHAs.size}`);
+
+            // Get new commits not in changelog (limit to last 100)
+            const gitLog = execSync('git log -100 --pretty=format:"%H|%h|%s|%an" --no-merges', { encoding: 'utf8' });
             const newCommits = [];
 
             for (const line of gitLog.split('\n').filter(l => l)) {
               const [sha, shaShort, message, author] = line.split('|');
 
-              // Skip if already documented or is changelog commit
+              // Skip if already documented or is changelog/merge commit
               if (existingSHAs.has(shaShort)) continue;
               if (message.includes('chore: update changelog')) continue;
               if (message.includes('Merge pull request')) continue;
@@ -311,35 +316,37 @@ jobs:
               }
             }
 
+            console.log(`New commits found: ${newCommits.length}`);
+
             // Build changelog
             let changelog = '# Changelog\n\n---\n\n';
 
             const isMain = context.ref === 'refs/heads/main';
             const isNewVersion = !existingVersions.has(currentVersion);
 
-            if (isMain && isNewVersion) {
-              // Release: new commits + unreleased → new version section
+            // Combine new commits with existing unreleased
+            const allUnreleased = [...newCommits, ...unreleasedEntries];
+
+            if (isMain && isNewVersion && allUnreleased.length > 0) {
+              // NEW VERSION: Move all unreleased to version section
+              console.log(`Creating new version section: ${currentVersion}`);
               changelog += `## ${currentVersion}\n\n`;
-              const allEntries = [...newCommits, ...unreleasedEntries];
-              if (allEntries.length > 0) {
-                changelog += allEntries.join('\n\n') + '\n\n';
-              }
+              changelog += allUnreleased.join('\n\n') + '\n\n';
             } else {
-              // Not release: new commits prepend to unreleased
+              // NO NEW VERSION: Keep in Unreleased
               changelog += '## Unreleased\n\n';
-              const allUnreleased = [...newCommits, ...unreleasedEntries];
               if (allUnreleased.length > 0) {
                 changelog += allUnreleased.join('\n\n') + '\n\n';
               }
             }
 
-            // Append all existing versioned sections (NEVER delete)
+            // Append all existing versioned sections (NEVER modify or delete)
             if (versionedSections.length > 0) {
               changelog += versionedSections.join('\n');
             }
 
             fs.writeFileSync('CHANGELOG.md', changelog);
-            console.log(`Added ${newCommits.length} new commits`);
+            console.log(`Changelog updated. New commits: ${newCommits.length}`);
 
       - name: Commit Changelog
         run: |
