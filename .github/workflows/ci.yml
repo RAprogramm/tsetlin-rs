@@ -214,45 +214,50 @@ jobs:
             const fs = require('fs');
             const { execSync } = require('child_process');
 
-            // Get version from Cargo.toml
+            // Version from Cargo.toml
             const cargo = fs.readFileSync('Cargo.toml', 'utf8');
             const versionMatch = cargo.match(/^version\s*=\s*"([^"]+)"/m);
-            const currentVersion = versionMatch ? `v${versionMatch[1]}` : null;
+            const currentVersion = versionMatch ? `v${versionMatch[1]}` : 'v0.0.0';
 
             // Read existing changelog
             let existing = '';
+            let lastSHA = '';
             let existingVersions = new Set();
-            let unreleasedContent = '';
+            let existingContent = '';
 
             if (fs.existsSync('CHANGELOG.md')) {
               existing = fs.readFileSync('CHANGELOG.md', 'utf8');
+
+              // Get first (most recent) SHA in changelog
+              const shaMatch = existing.match(/\[`([a-f0-9]{7})`\]/);
+              if (shaMatch) lastSHA = shaMatch[1];
+
+              // Get existing versions
               const versionRegex = /^## (v[\d.]+)/gm;
               let match;
               while ((match = versionRegex.exec(existing)) !== null) {
                 existingVersions.add(match[1]);
               }
-              // Extract unreleased content
-              const unreleasedMatch = existing.match(/## Unreleased\n\n([\s\S]*?)(?=\n## v|\n*$)/);
-              if (unreleasedMatch) {
-                unreleasedContent = unreleasedMatch[1].trim();
-              }
+
+              // Keep content after Unreleased section
+              const versionedContent = existing.match(/\n## v[\d.]+[\s\S]*/);
+              if (versionedContent) existingContent = versionedContent[0];
             }
 
-            // Get commits since last tag or all commits
-            let lastTag = '';
+            // Get commits since last documented SHA
+            const range = lastSHA ? `${lastSHA}..HEAD` : 'HEAD~100..HEAD';
+            let gitLog = '';
             try {
-              lastTag = execSync('git describe --tags --abbrev=0 2>/dev/null || echo ""', { encoding: 'utf8' }).trim();
-            } catch {}
-
-            const range = lastTag ? `${lastTag}..HEAD` : 'HEAD';
-            const gitLog = execSync(`git log ${range} --pretty=format:"%H|%h|%s|%an" --no-merges`, { encoding: 'utf8' });
+              gitLog = execSync(`git log ${range} --pretty=format:"%H|%h|%s|%an" --no-merges`, { encoding: 'utf8' });
+            } catch {
+              gitLog = execSync('git log -50 --pretty=format:"%H|%h|%s|%an" --no-merges', { encoding: 'utf8' });
+            }
 
             const newCommits = [];
             for (const line of gitLog.split('\n').filter(l => l)) {
               const [sha, shaShort, message, author] = line.split('|');
               if (message.includes('chore: update changelog')) continue;
 
-              // Get author info from GitHub
               const { data: commitData } = await github.rest.repos.getCommit({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -261,7 +266,6 @@ jobs:
 
               const ghAuthor = commitData.author;
               newCommits.push({
-                sha,
                 shaShort,
                 message,
                 author: ghAuthor ? ghAuthor.login : author,
@@ -271,53 +275,26 @@ jobs:
               });
             }
 
+            if (newCommits.length === 0) {
+              console.log('No new commits');
+              return;
+            }
+
             // Build changelog
-            let changelog = '# Changelog\n\n';
-            changelog += 'All notable changes to this project.\n\n';
-            changelog += '---\n\n';
+            let changelog = '# Changelog\n\n---\n\n';
 
-            // Determine if we should release (on main with new version)
             const isMain = context.ref === 'refs/heads/main';
-            const shouldRelease = isMain && currentVersion && !existingVersions.has(currentVersion);
+            const isNewVersion = !existingVersions.has(currentVersion);
 
-            if (shouldRelease && newCommits.length > 0) {
-              // Release: put commits under version
-              changelog += `## ${currentVersion}\n\n`;
-              for (const c of newCommits) {
-                const avatar = c.avatarUrl
-                  ? `<img src="${c.avatarUrl}" width="20" height="20" style="border-radius:50%"/> `
-                  : '';
-                const authorLink = c.authorUrl
-                  ? `[**${c.author}**](${c.authorUrl})`
-                  : `**${c.author}**`;
-                changelog += `- [\`${c.shaShort}\`](${c.url}) ${c.message}\n`;
-                changelog += `  ${avatar}${authorLink}\n\n`;
-              }
-            } else {
-              // Unreleased
-              changelog += '## Unreleased\n\n';
-              if (newCommits.length > 0) {
-                for (const c of newCommits) {
-                  const avatar = c.avatarUrl
-                    ? `<img src="${c.avatarUrl}" width="20" height="20" style="border-radius:50%"/> `
-                    : '';
-                  const authorLink = c.authorUrl
-                    ? `[**${c.author}**](${c.authorUrl})`
-                    : `**${c.author}**`;
-                  changelog += `- [\`${c.shaShort}\`](${c.url}) ${c.message}\n`;
-                  changelog += `  ${avatar}${authorLink}\n\n`;
-                }
-              } else {
-                changelog += '*No changes yet.*\n\n';
-              }
+            changelog += (isMain && isNewVersion) ? `## ${currentVersion}\n\n` : '## Unreleased\n\n';
+
+            for (const c of newCommits) {
+              const avatar = c.avatarUrl ? `<img src="${c.avatarUrl}" width="20" height="20" style="border-radius:50%"/> ` : '';
+              const authorLink = c.authorUrl ? `[**${c.author}**](${c.authorUrl})` : `**${c.author}**`;
+              changelog += `- [\`${c.shaShort}\`](${c.url}) ${c.message}\n  ${avatar}${authorLink}\n\n`;
             }
 
-            // Append existing versions
-            const existingVersionsContent = existing.match(/## v[\d.][\s\S]*/);
-            if (existingVersionsContent) {
-              changelog += existingVersionsContent[0];
-            }
-
+            changelog += existingContent;
             fs.writeFileSync('CHANGELOG.md', changelog);
 
       - name: Commit Changelog
