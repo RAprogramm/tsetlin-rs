@@ -274,8 +274,9 @@ jobs:
                 });
 
                 const ghAuthor = commitData.author;
-                const avatar = ghAuthor?.avatar_url ? `<img src="${ghAuthor.avatar_url}" width="20" height="20" style="border-radius:50%"/> ` : '';
-                const authorLink = ghAuthor ? `[**${ghAuthor.login}**](${ghAuthor.html_url})` : `**${author}**`;
+                const authorAvatar = ghAuthor?.avatar_url
+                  ? `[<img src="${ghAuthor.avatar_url}" width="20" height="20" style="border-radius:50%" title="${ghAuthor.login}"/>](${ghAuthor.html_url})`
+                  : `**${author}**`;
 
                 // Convert #123 to issue/PR links
                 const repoUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
@@ -294,7 +295,7 @@ jobs:
                   linkedMessage = `${issue}${emoji} ${type}${scope}: ${desc}`;
                 }
 
-                newCommits.push(`- [\`${shaShort}\`](${commitData.html_url}) ${linkedMessage}\n  ${avatar}${authorLink}`);
+                newCommits.push(`- [\`${shaShort}\`](${commitData.html_url}) ${linkedMessage}\n  ${authorAvatar}`);
               } catch (e) {
                 console.log(`Skip commit ${shaShort}: ${e.message}`);
               }
