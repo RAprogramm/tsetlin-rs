@@ -4,6 +4,18 @@
 
 ## Unreleased
 
+- [`a7bfeda`](https://github.com/RAprogramm/tsetlin-rs/commit/a7bfeda325c6aea4e26487e89a7d2ef4cb85f24b) 🔧 ci: auto-create GitHub release when version is in changelog
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`d4d75eb`](https://github.com/RAprogramm/tsetlin-rs/commit/d4d75eb94257ae2da0b21dad871da7583dd25afb) 💎 style: REUSE badge with for-the-badge styling
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`987959e`](https://github.com/RAprogramm/tsetlin-rs/commit/987959e29f05874e64dca203700ddc23717b3cb9) 🐛 fix: use official REUSE badge
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`bcd0c93`](https://github.com/RAprogramm/tsetlin-rs/commit/bcd0c9309faffda8940e9d21ccfe98c02144a417) 🐛 fix: changelog generation logic and restructure CHANGELOG.md
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
 - [`75dfee6`](https://github.com/RAprogramm/tsetlin-rs/commit/75dfee6ab498600051583023098ded8fa64595e6) 🐛 fix: improve crates.io version check and add REUSE badge
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
 
