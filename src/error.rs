@@ -1,7 +1,5 @@
 //! Error types for Tsetlin Machine.
 
-#[cfg(not(feature = "std"))]
-use alloc::string::String;
 use core::fmt;
 
 /// # Overview

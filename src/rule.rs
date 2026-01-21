@@ -12,7 +12,7 @@ use crate::Clause;
 ///
 /// A human-readable rule extracted from a clause.
 ///
-/// Represents a conjunction: (x[i1] AND x[i2] AND NOT x[j1] AND NOT x[j2]).
+/// Represents a conjunction: `(x[i1] AND x[i2] AND NOT x[j1] AND NOT x[j2])`.
 ///
 /// # Examples
 ///

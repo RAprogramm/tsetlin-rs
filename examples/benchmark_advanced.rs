@@ -6,6 +6,8 @@ use rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256PlusPlus;
 use tsetlin_rs::{AdvancedOptions, Config, TsetlinMachine};
 
+type Dataset = (Vec<Vec<u8>>, Vec<u8>, Vec<Vec<u8>>, Vec<u8>);
+
 fn generate_data(
     pattern: &str,
     n_train: usize,
@@ -13,7 +15,7 @@ fn generate_data(
     n_features: usize,
     noise: f32,
     seed: u64
-) -> (Vec<Vec<u8>>, Vec<u8>, Vec<Vec<u8>>, Vec<u8>) {
+) -> Dataset {
     let mut rng = Xoshiro256PlusPlus::seed_from_u64(seed);
 
     let gen_sample = |rng: &mut Xoshiro256PlusPlus| -> (Vec<u8>, u8) {
@@ -21,9 +23,9 @@ fn generate_data(
             .map(|_| rng.random_bool(0.5) as u8)
             .collect();
         let label = match pattern {
-            "xor" => (x[0] ^ x[1]) as u8,
-            "and" => (x[0] & x[1]) as u8,
-            "or" => (x[0] | x[1]) as u8,
+            "xor" => x[0] ^ x[1],
+            "and" => x[0] & x[1],
+            "or" => x[0] | x[1],
             "majority" => {
                 let sum: u8 = x.iter().sum();
                 if sum > (n_features / 2) as u8 { 1 } else { 0 }
@@ -122,8 +124,8 @@ fn main() {
 
     println!("## Test 1: Noise Sensitivity (XOR, 2 features)\n");
     println!(
-        "| {:<20} | {:>7} | {:>7} | {:>6} | {} |",
-        "Scenario", "Std", "Adv", "Δ", "Winner"
+        "| {:<20} | {:>7} | {:>7} | {:>6} | Winner |",
+        "Scenario", "Std", "Adv", "Δ"
     );
     println!("|{:-<22}|{:-<9}|{:-<9}|{:-<8}|{:-<12}|", "", "", "", "", "");
 
@@ -134,8 +136,8 @@ fn main() {
 
     println!("\n## Test 2: Pattern Complexity (10% noise)\n");
     println!(
-        "| {:<20} | {:>7} | {:>7} | {:>6} | {} |",
-        "Pattern", "Std", "Adv", "Δ", "Winner"
+        "| {:<20} | {:>7} | {:>7} | {:>6} | Winner |",
+        "Pattern", "Std", "Adv", "Δ"
     );
     println!("|{:-<22}|{:-<9}|{:-<9}|{:-<8}|{:-<12}|", "", "", "", "", "");
 
@@ -148,8 +150,8 @@ fn main() {
 
     println!("\n## Test 3: Scale (Majority voting, 10% noise)\n");
     println!(
-        "| {:<20} | {:>7} | {:>7} | {:>6} | {} |",
-        "Features/Clauses", "Std", "Adv", "Δ", "Winner"
+        "| {:<20} | {:>7} | {:>7} | {:>6} | Winner |",
+        "Features/Clauses", "Std", "Adv", "Δ"
     );
     println!("|{:-<22}|{:-<9}|{:-<9}|{:-<8}|{:-<12}|", "", "", "", "", "");
 
@@ -160,8 +162,8 @@ fn main() {
 
     println!("\n## Test 4: High Noise Stress Test\n");
     println!(
-        "| {:<20} | {:>7} | {:>7} | {:>6} | {} |",
-        "Pattern + Noise", "Std", "Adv", "Δ", "Winner"
+        "| {:<20} | {:>7} | {:>7} | {:>6} | Winner |",
+        "Pattern + Noise", "Std", "Adv", "Δ"
     );
     println!("|{:-<22}|{:-<9}|{:-<9}|{:-<8}|{:-<12}|", "", "", "", "", "");
 

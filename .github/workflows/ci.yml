@@ -1,0 +1,331 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================================================
+  # STAGE 1: Quick checks (parallel, no deps)
+  # ============================================================================
+
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - run: cargo +nightly fmt --all -- --check
+
+  check:
+    name: Check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: ${{ matrix.os }}
+          shared-key: stable
+
+      - run: cargo check --features "parallel,serde"
+
+  check-simd:
+    name: Check SIMD (nightly)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: simd
+          shared-key: nightly
+
+      - run: cargo +nightly check --all-features
+
+  check-no-std:
+    name: Check no_std
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: no-std
+          shared-key: stable
+
+      - run: cargo check --no-default-features
+
+  # ============================================================================
+  # STAGE 2: Linting (needs: check)
+  # ============================================================================
+
+  clippy:
+    name: Clippy
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: clippy
+          shared-key: stable
+
+      - run: cargo clippy --all-targets --features "parallel,serde" -- -D warnings
+
+  doc:
+    name: Documentation
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: doc
+          shared-key: stable
+
+      - run: cargo doc --no-deps --features "parallel,serde"
+        env:
+          RUSTDOCFLAGS: -Dwarnings
+
+  # ============================================================================
+  # STAGE 3: Testing (needs: clippy)
+  # ============================================================================
+
+  test:
+    name: Test (${{ matrix.os }}, ${{ matrix.features || 'default' }})
+    needs: clippy
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        features: ["", "serde", "parallel", "parallel,serde"]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: test-${{ matrix.os }}
+          shared-key: stable
+          cache-targets: true
+
+      - name: Run tests
+        run: cargo test --features "${{ matrix.features }}"
+
+  test-simd:
+    name: Test SIMD (nightly)
+    needs: check-simd
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: test-simd
+          shared-key: nightly
+          cache-targets: true
+
+      - run: cargo +nightly test --all-features
+
+  # ============================================================================
+  # STAGE 4: Coverage (needs: test, ubuntu only)
+  # ============================================================================
+
+  coverage:
+    name: Coverage
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@cargo-llvm-cov
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: coverage
+          shared-key: stable
+          cache-targets: true
+
+      - name: Generate coverage
+        run: cargo llvm-cov --features "parallel,serde" --lcov --output-path lcov.info
+
+      - uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          fail_ci_if_error: false
+
+  # ============================================================================
+  # STAGE 5: Changelog (every push, skip bot commits)
+  # ============================================================================
+
+  changelog:
+    name: Changelog
+    runs-on: ubuntu-latest
+    if: "github.event_name == 'push' && !contains(github.event.head_commit.message, 'chore: update changelog')"
+    needs: [test, doc]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - name: Generate Changelog
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const { execSync } = require('child_process');
+
+            // Version from Cargo.toml
+            const cargo = fs.readFileSync('Cargo.toml', 'utf8');
+            const versionMatch = cargo.match(/^version\s*=\s*"([^"]+)"/m);
+            const currentVersion = versionMatch ? `v${versionMatch[1]}` : 'v0.0.0';
+
+            // Read existing changelog
+            let existing = '';
+            let lastSHA = '';
+            let existingVersions = new Set();
+            let existingContent = '';
+
+            if (fs.existsSync('CHANGELOG.md')) {
+              existing = fs.readFileSync('CHANGELOG.md', 'utf8');
+
+              // Get first (most recent) SHA in changelog
+              const shaMatch = existing.match(/\[`([a-f0-9]{7})`\]/);
+              if (shaMatch) lastSHA = shaMatch[1];
+
+              // Get existing versions
+              const versionRegex = /^## (v[\d.]+)/gm;
+              let match;
+              while ((match = versionRegex.exec(existing)) !== null) {
+                existingVersions.add(match[1]);
+              }
+
+              // Keep content after Unreleased section
+              const versionedContent = existing.match(/\n## v[\d.]+[\s\S]*/);
+              if (versionedContent) existingContent = versionedContent[0];
+            }
+
+            // Get commits since last documented SHA
+            const range = lastSHA ? `${lastSHA}..HEAD` : 'HEAD~100..HEAD';
+            let gitLog = '';
+            try {
+              gitLog = execSync(`git log ${range} --pretty=format:"%H|%h|%s|%an" --no-merges`, { encoding: 'utf8' });
+            } catch {
+              gitLog = execSync('git log -50 --pretty=format:"%H|%h|%s|%an" --no-merges', { encoding: 'utf8' });
+            }
+
+            const newCommits = [];
+            for (const line of gitLog.split('\n').filter(l => l)) {
+              const [sha, shaShort, message, author] = line.split('|');
+              if (message.includes('chore: update changelog')) continue;
+
+              const { data: commitData } = await github.rest.repos.getCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: sha
+              });
+
+              const ghAuthor = commitData.author;
+              newCommits.push({
+                shaShort,
+                message,
+                author: ghAuthor ? ghAuthor.login : author,
+                avatarUrl: ghAuthor ? ghAuthor.avatar_url : null,
+                authorUrl: ghAuthor ? ghAuthor.html_url : null,
+                url: commitData.html_url
+              });
+            }
+
+            if (newCommits.length === 0) {
+              console.log('No new commits');
+              return;
+            }
+
+            // Build changelog
+            let changelog = '# Changelog\n\n---\n\n';
+
+            const isMain = context.ref === 'refs/heads/main';
+            const isNewVersion = !existingVersions.has(currentVersion);
+
+            changelog += (isMain && isNewVersion) ? `## ${currentVersion}\n\n` : '## Unreleased\n\n';
+
+            for (const c of newCommits) {
+              const avatar = c.avatarUrl ? `<img src="${c.avatarUrl}" width="20" height="20" style="border-radius:50%"/> ` : '';
+              const authorLink = c.authorUrl ? `[**${c.author}**](${c.authorUrl})` : `**${c.author}**`;
+              changelog += `- [\`${c.shaShort}\`](${c.url}) ${c.message}\n  ${avatar}${authorLink}\n\n`;
+            }
+
+            changelog += existingContent;
+            fs.writeFileSync('CHANGELOG.md', changelog);
+
+      - name: Commit Changelog
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git diff --staged --quiet || git commit -m "chore: update changelog"
+          git push
+
+  # ============================================================================
+  # Final gate (for branch protection)
+  # ============================================================================
+
+  ci-success:
+    name: CI Success
+    if: always()
+    needs: [fmt, check, check-simd, check-no-std, clippy, doc, test, test-simd, coverage]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs
+        run: |
+          results=("${{ needs.fmt.result }}" "${{ needs.check.result }}" \
+                   "${{ needs.check-simd.result }}" "${{ needs.check-no-std.result }}" \
+                   "${{ needs.clippy.result }}" "${{ needs.doc.result }}" \
+                   "${{ needs.test.result }}" "${{ needs.test-simd.result }}" \
+                   "${{ needs.coverage.result }}")
+          for r in "${results[@]}"; do
+            if [[ "$r" != "success" ]]; then
+              echo "CI failed"
+              exit 1
+            fi
+          done
+          echo "All CI checks passed!"

@@ -5,18 +5,27 @@
 //!
 //! # Models
 //!
-//! - [`TsetlinMachine`] - Binary classification
+//! - [`TsetlinMachine`] - Binary classification (dynamic)
+//! - [`SmallTsetlinMachine`] - Binary classification (compile-time optimized)
 //! - [`MultiClass`] - Multi-class classification (one-vs-all)
 //! - [`Regressor`] - Regression
 //! - [`Convolutional`] - Image classification with patch extraction
+//!
+//! # Clause Types
+//!
+//! | Type | Heap | Best For |
+//! |------|------|----------|
+//! | [`Clause`] | Yes | Dynamic dimensions, serde |
+//! | [`SmallClause`] | No | N ≤ 64, maximum speed |
+//! | [`BitwiseClause`] | Yes | N ≥ 64, 25-92x speedup |
+//! | [`SmallBitwiseClause`] | No | 64-256 features, no heap |
 //!
 //! # Advanced Features
 //!
 //! - **Weighted Clauses** - Clauses learn weights based on accuracy
 //! - **Adaptive Threshold** - Dynamic T adjustment during training
 //! - **Clause Pruning** - Automatic reset of dead/ineffective clauses
-//! - [`BitwiseClause`] - 64 features per CPU instruction (25-92x speedup)
-//! - [`SmallClause`] - Stack-allocated clauses with const generics
+//! - **Const Generics** - Zero-allocation stack types with loop unrolling
 //!
 //! # Feature Flags
 //!
@@ -79,5 +88,9 @@ pub use model::{TsetlinModel, VotingModel};
 pub use multiclass::MultiClass;
 pub use regression::Regressor;
 pub use rule::Rule;
-pub use small::{Clause2, Clause4, Clause8, Clause16, Clause32, SmallClause};
+pub use small::{
+    BitwiseClause64, BitwiseClause128, BitwiseClause256, Clause2, Clause4, Clause8, Clause16,
+    Clause32, Clause64, SmallBitwiseClause, SmallClause, SmallTsetlinMachine, TM2x20, TM4x40,
+    TM8x80, TM16x160, pack_input_small
+};
 pub use training::{EarlyStop, FitOptions, FitResult};
