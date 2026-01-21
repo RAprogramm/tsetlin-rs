@@ -15,9 +15,13 @@ fn bench_clause_evaluate(c: &mut Criterion) {
         let clause = Clause::new(n_features, 100, 1);
         let x: Vec<u8> = (0..n_features).map(|i| (i % 2) as u8).collect();
 
-        group.bench_with_input(BenchmarkId::from_parameter(n_features), &n_features, |b, _| {
-            b.iter(|| black_box(clause.evaluate(black_box(&x))));
-        });
+        group.bench_with_input(
+            BenchmarkId::from_parameter(n_features),
+            &n_features,
+            |b, _| {
+                b.iter(|| black_box(clause.evaluate(black_box(&x))));
+            }
+        );
     }
 
     group.finish();
@@ -27,13 +31,21 @@ fn bench_predict(c: &mut Criterion) {
     let mut group = c.benchmark_group("predict");
 
     for n_clauses in [10, 50, 100, 200] {
-        let config = Config::builder().clauses(n_clauses).features(64).build().unwrap();
+        let config = Config::builder()
+            .clauses(n_clauses)
+            .features(64)
+            .build()
+            .unwrap();
         let tm = TsetlinMachine::new(config, 15);
         let x: Vec<u8> = (0..64).map(|i| (i % 2) as u8).collect();
 
-        group.bench_with_input(BenchmarkId::from_parameter(n_clauses), &n_clauses, |b, _| {
-            b.iter(|| black_box(tm.predict(black_box(&x))));
-        });
+        group.bench_with_input(
+            BenchmarkId::from_parameter(n_clauses),
+            &n_clauses,
+            |b, _| {
+                b.iter(|| black_box(tm.predict(black_box(&x))));
+            }
+        );
     }
 
     group.finish();
@@ -42,7 +54,9 @@ fn bench_predict(c: &mut Criterion) {
 fn bench_train_epoch(c: &mut Criterion) {
     let config = Config::builder().clauses(50).features(64).build().unwrap();
 
-    let x: Vec<Vec<u8>> = (0..100).map(|i| (0..64).map(|j| ((i + j) % 2) as u8).collect()).collect();
+    let x: Vec<Vec<u8>> = (0..100)
+        .map(|i| (0..64).map(|j| ((i + j) % 2) as u8).collect())
+        .collect();
     let y: Vec<u8> = (0..100).map(|i| (i % 2) as u8).collect();
 
     c.bench_function("train_epoch_100_samples", |b| {
@@ -61,9 +75,13 @@ fn bench_multiclass_predict(c: &mut Criterion) {
         let tm = MultiClass::new(config, n_classes, 25);
         let x: Vec<u8> = (0..64).map(|i| (i % 2) as u8).collect();
 
-        group.bench_with_input(BenchmarkId::from_parameter(n_classes), &n_classes, |b, _| {
-            b.iter(|| black_box(tm.predict(black_box(&x))));
-        });
+        group.bench_with_input(
+            BenchmarkId::from_parameter(n_classes),
+            &n_classes,
+            |b, _| {
+                b.iter(|| black_box(tm.predict(black_box(&x))));
+            }
+        );
     }
 
     group.finish();
@@ -75,20 +93,28 @@ fn bench_feedback(c: &mut Criterion) {
     for n_features in [64, 256, 1024] {
         let x: Vec<u8> = (0..n_features).map(|i| (i % 2) as u8).collect();
 
-        group.bench_with_input(BenchmarkId::new("type_i", n_features), &n_features, |b, &n| {
-            b.iter(|| {
-                let mut clause = Clause::new(n, 100, 1);
-                let mut rng = rng_from_seed(42);
-                feedback::type_i(&mut clause, black_box(&x), true, 3.9, &mut rng);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("type_i", n_features),
+            &n_features,
+            |b, &n| {
+                b.iter(|| {
+                    let mut clause = Clause::new(n, 100, 1);
+                    let mut rng = rng_from_seed(42);
+                    feedback::type_i(&mut clause, black_box(&x), true, 3.9, &mut rng);
+                });
+            }
+        );
 
-        group.bench_with_input(BenchmarkId::new("type_ii", n_features), &n_features, |b, &n| {
-            b.iter(|| {
-                let mut clause = Clause::new(n, 100, 1);
-                feedback::type_ii(&mut clause, black_box(&x));
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("type_ii", n_features),
+            &n_features,
+            |b, &n| {
+                b.iter(|| {
+                    let mut clause = Clause::new(n, 100, 1);
+                    feedback::type_ii(&mut clause, black_box(&x));
+                });
+            }
+        );
     }
 
     group.finish();
@@ -98,7 +124,9 @@ fn bench_rule_extraction(c: &mut Criterion) {
     let config = Config::builder().clauses(100).features(64).build().unwrap();
     let mut tm = TsetlinMachine::new(config, 15);
 
-    let x: Vec<Vec<u8>> = (0..100).map(|i| (0..64).map(|j| ((i + j) % 2) as u8).collect()).collect();
+    let x: Vec<Vec<u8>> = (0..100)
+        .map(|i| (0..64).map(|j| ((i + j) % 2) as u8).collect())
+        .collect();
     let y: Vec<u8> = (0..100).map(|i| (i % 2) as u8).collect();
     tm.fit(&x, &y, 50, 42);
 

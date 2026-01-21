@@ -1,4 +1,5 @@
-//! Small-sized Tsetlin Machine with const generics for compile-time optimization.
+//! Small-sized Tsetlin Machine with const generics for compile-time
+//! optimization.
 //!
 //! Uses stack allocation and compile-time unrolling for small feature sets.
 
@@ -32,8 +33,8 @@ impl<const N: usize> SmallClause<N> {
     pub fn new(n_states: i16, polarity: i8) -> Self {
         debug_assert!(polarity == 1 || polarity == -1);
         Self {
-            include:  array::from_fn(|_| Automaton::new(n_states)),
-            negated:  array::from_fn(|_| Automaton::new(n_states)),
+            include: array::from_fn(|_| Automaton::new(n_states)),
+            negated: array::from_fn(|_| Automaton::new(n_states)),
             polarity
         }
     }

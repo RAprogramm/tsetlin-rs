@@ -1,4 +1,5 @@
-//! Binary classification Tsetlin Machine with weighted clauses and adaptive threshold.
+//! Binary classification Tsetlin Machine with weighted clauses and adaptive
+//! threshold.
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
@@ -7,10 +8,12 @@ use rand::Rng;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::feedback::{type_i, type_ii};
-use crate::training::{EarlyStopTracker, FitOptions, FitResult};
-use crate::utils::rng_from_seed;
-use crate::{Clause, Config, Rule};
+use crate::{
+    Clause, Config, Rule,
+    feedback::{type_i, type_ii},
+    training::{EarlyStopTracker, FitOptions, FitResult},
+    utils::rng_from_seed
+};
 
 /// # Overview
 ///
@@ -47,7 +50,8 @@ impl Default for AdvancedOptions {
 
 /// # Overview
 ///
-/// Binary classification Tsetlin Machine with weighted clauses and adaptive threshold.
+/// Binary classification Tsetlin Machine with weighted clauses and adaptive
+/// threshold.
 ///
 /// # Examples
 ///
@@ -63,8 +67,8 @@ impl Default for AdvancedOptions {
 pub struct TsetlinMachine {
     clauses:  Vec<Clause>,
     config:   Config,
-    t:      f32,
-    t_base: f32,
+    t:        f32,
+    t_base:   f32,
     advanced: AdvancedOptions
 }
 
@@ -243,22 +247,45 @@ impl TsetlinMachine {
         }
     }
 
-    /// # Overview
-    ///
     /// Simple training for given epochs.
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - Training inputs (binary features)
+    /// * `y` - Binary labels (0 or 1)
+    /// * `epochs` - Number of training epochs
+    /// * `seed` - Random seed for reproducibility
     pub fn fit(&mut self, x: &[Vec<u8>], y: &[u8], epochs: usize, seed: u64) {
-        self.fit_with_options(x, y, FitOptions::new(epochs, seed));
+        let _ = self.fit_with_options(x, y, FitOptions::new(epochs, seed));
     }
 
-    /// # Overview
+    /// Training with full options including early stopping and callbacks.
     ///
-    /// Training with options and early stopping.
-    pub fn fit_with_options(&mut self, x: &[Vec<u8>], y: &[u8], opts: FitOptions) -> FitResult {
+    /// # Arguments
+    ///
+    /// * `x` - Training inputs (binary features)
+    /// * `y` - Binary labels (0 or 1)
+    /// * `opts` - Training options (epochs, early stopping, callback)
+    ///
+    /// # Returns
+    ///
+    /// [`FitResult`] with training statistics.
+    pub fn fit_with_options(
+        &mut self,
+        x: &[Vec<u8>],
+        y: &[u8],
+        mut opts: FitOptions
+    ) -> FitResult {
+        if x.is_empty() || x.len() != y.len() {
+            return FitResult::new(0, 0.0, false);
+        }
+
         let mut rng = rng_from_seed(opts.seed);
         let mut indices: Vec<usize> = (0..x.len()).collect();
         let mut tracker = opts.early_stop.as_ref().map(EarlyStopTracker::new);
         let mut stopped = false;
         let mut epochs_run = 0;
+        let mut history = Vec::with_capacity(opts.epochs);
 
         for epoch in 0..opts.epochs {
             self.reset_activations();
@@ -276,30 +303,48 @@ impl TsetlinMachine {
             self.prune_dead_clauses();
 
             epochs_run = epoch + 1;
+            let accuracy = self.evaluate(x, y);
+            history.push(accuracy);
 
+            // Callback
+            if let Some(ref mut callback) = opts.callback
+                && !callback(epoch + 1, accuracy)
+            {
+                stopped = true;
+                break;
+            }
+
+            // Early stopping
             if let Some(ref mut t) = tracker
-                && t.update(self.evaluate(x, y))
+                && t.update(accuracy)
             {
                 stopped = true;
                 break;
             }
         }
 
-        FitResult::new(epochs_run, self.evaluate(x, y), stopped)
+        FitResult::with_history(epochs_run, self.evaluate(x, y), stopped, history)
     }
 
-    /// # Overview
-    ///
     /// Evaluates accuracy on test data.
+    ///
+    /// Returns fraction of correct predictions (0.0 to 1.0).
     #[inline]
+    #[must_use]
     pub fn evaluate(&self, x: &[Vec<u8>], y: &[u8]) -> f32 {
-        let correct = x.iter().zip(y).filter(|(xi, yi)| self.predict(xi) == **yi).count();
+        if x.is_empty() {
+            return 0.0;
+        }
+        let correct = x
+            .iter()
+            .zip(y)
+            .filter(|(xi, yi)| self.predict(xi) == **yi)
+            .count();
         correct as f32 / x.len() as f32
     }
 
-    /// # Overview
-    ///
     /// Extracts learned rules from all clauses.
+    #[must_use]
     pub fn rules(&self) -> Vec<Rule> {
         self.clauses.iter().map(Rule::from_clause).collect()
     }
@@ -311,11 +356,53 @@ impl TsetlinMachine {
         self.clauses.iter().map(|c| c.weight()).collect()
     }
 
-    /// # Overview
-    ///
     /// Returns clause activation counts.
+    #[must_use]
     pub fn clause_activations(&self) -> Vec<u32> {
         self.clauses.iter().map(|c| c.activations()).collect()
+    }
+
+    /// Quick constructor with sensible defaults.
+    ///
+    /// Equivalent to
+    /// `Config::builder().clauses(n_clauses).features(n_features).build()`
+    /// followed by `TsetlinMachine::new(config, threshold)`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if n_clauses is odd or zero, or n_features is zero.
+    #[must_use]
+    pub fn quick(n_clauses: usize, n_features: usize, threshold: i32) -> Self {
+        let config = Config::builder()
+            .clauses(n_clauses)
+            .features(n_features)
+            .build()
+            .expect("invalid quick config");
+        Self::new(config, threshold)
+    }
+}
+
+impl crate::model::TsetlinModel<Vec<u8>, u8> for TsetlinMachine {
+    fn fit(&mut self, x: &[Vec<u8>], y: &[u8], epochs: usize, seed: u64) {
+        TsetlinMachine::fit(self, x, y, epochs, seed);
+    }
+
+    fn predict(&self, x: &Vec<u8>) -> u8 {
+        TsetlinMachine::predict(self, x)
+    }
+
+    fn evaluate(&self, x: &[Vec<u8>], y: &[u8]) -> f32 {
+        TsetlinMachine::evaluate(self, x, y)
+    }
+
+    fn predict_batch(&self, xs: &[Vec<u8>]) -> Vec<u8> {
+        TsetlinMachine::predict_batch(self, xs)
+    }
+}
+
+impl crate::model::VotingModel<Vec<u8>> for TsetlinMachine {
+    fn sum_votes(&self, x: &Vec<u8>) -> f32 {
+        TsetlinMachine::sum_votes(self, x)
     }
 }
 

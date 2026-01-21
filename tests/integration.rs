@@ -159,7 +159,7 @@ fn advanced_weighted_clauses() {
     let config = Config::builder().clauses(20).features(2).build().unwrap();
 
     let opts = AdvancedOptions {
-        weight_lr:  0.1,
+        weight_lr: 0.1,
         weight_min: 0.2,
         weight_max: 2.0,
         ..Default::default()
@@ -183,9 +183,9 @@ fn advanced_adaptive_threshold() {
 
     let opts = AdvancedOptions {
         adaptive_t: true,
-        t_min:      5.0,
-        t_max:      20.0,
-        t_lr:       0.1,
+        t_min: 5.0,
+        t_max: 20.0,
+        t_lr: 0.1,
         ..Default::default()
     };
 
@@ -210,10 +210,10 @@ fn advanced_clause_pruning() {
 
     let opts = AdvancedOptions {
         prune_threshold: 5,
-        prune_weight:    0.3,
-        weight_lr:       0.1,
-        weight_min:      0.2,
-        weight_max:      2.0,
+        prune_weight: 0.3,
+        weight_lr: 0.1,
+        weight_min: 0.2,
+        weight_max: 2.0,
         ..Default::default()
     };
 
@@ -299,7 +299,7 @@ fn clause_weight_affects_vote() {
 
     // Simulate weight change via record_outcome
     for _ in 0..10 {
-        clause.record_outcome(true);  // 10 correct predictions
+        clause.record_outcome(true); // 10 correct predictions
     }
     clause.update_weight(0.5, 0.1, 3.0);
 

@@ -2,6 +2,7 @@
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
+use core::cmp::Ordering;
 
 use rand::Rng;
 #[cfg(feature = "serde")]
@@ -71,13 +72,14 @@ impl Convolutional {
             .collect()
     }
 
+    /// Predicts class with highest vote sum.
+    #[must_use]
     pub fn predict(&self, image: &[u8]) -> usize {
         self.class_votes(image)
             .iter()
             .enumerate()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-            .map(|(i, _)| i)
-            .unwrap_or(0)
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
+            .map_or(0, |(i, _)| i)
     }
 
     pub fn fit(&mut self, images: &[Vec<u8>], labels: &[usize], epochs: usize, seed: u64) {

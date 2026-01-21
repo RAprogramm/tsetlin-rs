@@ -35,7 +35,9 @@ impl BitwiseClause {
     pub fn new(n_features: usize, n_states: i16, polarity: i8) -> Self {
         debug_assert!(polarity == 1 || polarity == -1);
         let n_words = n_features.div_ceil(64);
-        let automata = (0..2 * n_features).map(|_| Automaton::new(n_states)).collect();
+        let automata = (0..2 * n_features)
+            .map(|_| Automaton::new(n_states))
+            .collect();
 
         Self {
             automata,
@@ -101,13 +103,17 @@ impl BitwiseClause {
         self.dirty = false;
     }
 
-    /// # Overview
+    /// Evaluates clause using bitwise AND operations.
     ///
-    /// Evaluates clause using bitwise AND. 64 features per operation.
+    /// Processes 64 features per CPU instruction for massive speedup.
     ///
-    /// # Safety
+    /// # Arguments
     ///
-    /// Input must be packed as u64 words. Call `pack_input` first.
+    /// * `x_packed` - Input packed as u64 words via [`pack_input`]
+    ///
+    /// # Panics
+    ///
+    /// Debug-asserts that `rebuild_masks()` was called after training.
     #[inline]
     #[must_use]
     pub fn evaluate_packed(&self, x_packed: &[u64]) -> bool {
@@ -116,13 +122,14 @@ impl BitwiseClause {
         let n_words = self.include.len().min(x_packed.len());
 
         for i in 0..n_words {
-            // SAFETY: i is bounded by min of both lengths
+            // SAFETY: `i < n_words <= min(include.len(), x_packed.len())`.
+            // Therefore all three accesses are within bounds.
             let x = unsafe { *x_packed.get_unchecked(i) };
             let inc = unsafe { *self.include.get_unchecked(i) };
             let neg = unsafe { *self.negated.get_unchecked(i) };
 
-            // include violation: inc & !x != 0
-            // negated violation: neg & x != 0
+            // include violation: inc & !x != 0 (required bit is 0)
+            // negated violation: neg & x != 0 (forbidden bit is 1)
             if (inc & !x) | (neg & x) != 0 {
                 return false;
             }
@@ -130,8 +137,6 @@ impl BitwiseClause {
         true
     }
 
-    /// # Overview
-    ///
     /// Returns polarity if fires, 0 otherwise.
     #[inline(always)]
     #[must_use]
@@ -143,17 +148,21 @@ impl BitwiseClause {
         }
     }
 
-    /// # Overview
-    ///
     /// Fallback scalar evaluation (no packing needed).
+    ///
+    /// Slower than `evaluate_packed` but works with unpacked input.
     #[inline]
     #[must_use]
     pub fn evaluate(&self, x: &[u8]) -> bool {
         let n = self.n_features.min(x.len());
 
         for k in 0..n {
+            // SAFETY: `k < n <= self.n_features`, and `automata.len() == 2 * n_features`.
+            // Therefore `2 * k + 1 < automata.len()`.
             let include = unsafe { self.automata.get_unchecked(2 * k).action() };
             let negated = unsafe { self.automata.get_unchecked(2 * k + 1).action() };
+
+            // SAFETY: `k < n <= x.len()`, so `k` is in bounds.
             let xk = unsafe { *x.get_unchecked(k) };
 
             if include && xk == 0 {

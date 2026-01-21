@@ -1,27 +1,43 @@
 //! # Tsetlin Machine
 //!
-//! Professional Rust implementation of the Tsetlin Machine algorithm.
+//! A professional Rust implementation of the Tsetlin Machine algorithm
+//! for interpretable machine learning.
 //!
-//! # Features
+//! # Models
+//!
+//! - [`TsetlinMachine`] - Binary classification
+//! - [`MultiClass`] - Multi-class classification (one-vs-all)
+//! - [`Regressor`] - Regression
+//! - [`Convolutional`] - Image classification with patch extraction
+//!
+//! # Advanced Features
+//!
+//! - **Weighted Clauses** - Clauses learn weights based on accuracy
+//! - **Adaptive Threshold** - Dynamic T adjustment during training
+//! - **Clause Pruning** - Automatic reset of dead/ineffective clauses
+//! - [`BitwiseClause`] - 64 features per CPU instruction (25-92x speedup)
+//! - [`SmallClause`] - Stack-allocated clauses with const generics
+//!
+//! # Feature Flags
 //!
 //! - `std` (default): Standard library support
 //! - `simd`: SIMD-optimized evaluation (requires nightly)
 //! - `parallel`: Parallel training via rayon
 //! - `serde`: Serialization support
 //!
-//! # Examples
+//! # Quick Start
 //!
 //! ```
 //! use tsetlin_rs::{Config, TsetlinMachine};
 //!
 //! let config = Config::builder().clauses(20).features(2).build().unwrap();
-//!
 //! let mut tm = TsetlinMachine::new(config, 10);
 //!
 //! let x = vec![vec![0, 0], vec![0, 1], vec![1, 0], vec![1, 1]];
 //! let y = vec![0, 1, 1, 0];
 //!
 //! tm.fit(&x, &y, 200, 42);
+//! assert!(tm.evaluate(&x, &y) >= 0.75);
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -38,6 +54,7 @@ mod config;
 mod convolutional;
 pub mod error;
 pub mod feedback;
+mod model;
 mod multiclass;
 mod regression;
 mod rule;
@@ -58,8 +75,9 @@ pub use clause::Clause;
 pub use config::{Config, ConfigBuilder};
 pub use convolutional::{ConvConfig, Convolutional};
 pub use error::{Error, Result};
+pub use model::{TsetlinModel, VotingModel};
 pub use multiclass::MultiClass;
 pub use regression::Regressor;
 pub use rule::Rule;
-pub use small::{Clause16, Clause2, Clause32, Clause4, Clause8, SmallClause};
+pub use small::{Clause2, Clause4, Clause8, Clause16, Clause32, SmallClause};
 pub use training::{EarlyStop, FitOptions, FitResult};

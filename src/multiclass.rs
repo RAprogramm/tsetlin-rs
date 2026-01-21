@@ -2,6 +2,7 @@
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
+use core::cmp::Ordering;
 
 use rand::Rng;
 #[cfg(feature = "serde")]
@@ -13,18 +14,23 @@ use crate::{
     utils::rng_from_seed
 };
 
-/// # Overview
-///
 /// Multi-class Tsetlin Machine using one-vs-all strategy.
 ///
-/// # Examples
+/// Each class has its own set of clauses. Prediction is the class
+/// with the highest vote sum.
+///
+/// # Example
 ///
 /// ```
 /// use tsetlin_rs::{Config, MultiClass};
 ///
 /// let config = Config::builder().clauses(100).features(4).build().unwrap();
-///
 /// let mut tm = MultiClass::new(config, 3, 50);
+///
+/// // Train on data where label is class index (0, 1, or 2)
+/// let x = vec![vec![1, 1, 0, 0], vec![0, 0, 1, 1]];
+/// let y = vec![0, 1];
+/// tm.fit(&x, &y, 100, 42);
 /// ```
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -35,9 +41,14 @@ pub struct MultiClass {
 }
 
 impl MultiClass {
-    /// # Overview
+    /// Creates multi-class machine with given number of classes.
     ///
-    /// Creates multi-class machine with n_classes.
+    /// # Arguments
+    ///
+    /// * `config` - Machine configuration (clauses, features, etc.)
+    /// * `n_classes` - Number of output classes
+    /// * `threshold` - Vote threshold for training
+    #[must_use]
     pub fn new(config: Config, n_classes: usize, threshold: i32) -> Self {
         let clauses = (0..n_classes)
             .map(|_| {
@@ -57,14 +68,15 @@ impl MultiClass {
         }
     }
 
+    /// Returns the number of classes.
     #[inline]
+    #[must_use]
     pub fn n_classes(&self) -> usize {
         self.clauses.len()
     }
 
-    /// # Overview
-    ///
-    /// Vote sums per class.
+    /// Computes vote sums for each class.
+    #[must_use]
     pub fn class_votes(&self, x: &[u8]) -> Vec<f32> {
         self.clauses
             .iter()
@@ -72,21 +84,19 @@ impl MultiClass {
             .collect()
     }
 
-    /// # Overview
+    /// Predicts class with highest vote sum.
     ///
-    /// Predicts class with highest vote.
+    /// Returns 0 if votes are empty or contain NaN.
+    #[must_use]
     pub fn predict(&self, x: &[u8]) -> usize {
         self.class_votes(x)
             .iter()
             .enumerate()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-            .map(|(i, _)| i)
-            .unwrap_or(0)
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
+            .map_or(0, |(i, _)| i)
     }
 
-    /// # Overview
-    ///
-    /// Trains on single example.
+    /// Trains on a single example.
     pub fn train_one<R: Rng>(&mut self, x: &[u8], y: usize, rng: &mut R) {
         let votes = self.class_votes(x);
         let t = self.threshold as f32;
@@ -118,9 +128,14 @@ impl MultiClass {
         }
     }
 
-    /// # Overview
+    /// Trains for given number of epochs.
     ///
-    /// Trains for given epochs.
+    /// # Arguments
+    ///
+    /// * `x` - Training inputs (binary features)
+    /// * `y` - Class labels (0 to n_classes-1)
+    /// * `epochs` - Number of training epochs
+    /// * `seed` - Random seed for reproducibility
     pub fn fit(&mut self, x: &[Vec<u8>], y: &[usize], epochs: usize, seed: u64) {
         let mut rng = rng_from_seed(seed);
         let mut indices: Vec<usize> = (0..x.len()).collect();
@@ -133,16 +148,49 @@ impl MultiClass {
         }
     }
 
-    /// # Overview
+    /// Evaluates classification accuracy on test data.
     ///
-    /// Evaluates accuracy.
+    /// Returns fraction of correct predictions (0.0 to 1.0).
+    #[must_use]
     pub fn evaluate(&self, x: &[Vec<u8>], y: &[usize]) -> f32 {
+        if x.is_empty() {
+            return 0.0;
+        }
         let correct = x
             .iter()
             .zip(y)
             .filter(|(xi, yi)| self.predict(xi) == **yi)
             .count();
         correct as f32 / x.len() as f32
+    }
+
+    /// Quick constructor with sensible defaults.
+    ///
+    /// # Panics
+    ///
+    /// Panics if n_clauses is odd or zero, or n_features is zero.
+    #[must_use]
+    pub fn quick(n_clauses: usize, n_features: usize, n_classes: usize, threshold: i32) -> Self {
+        let config = Config::builder()
+            .clauses(n_clauses)
+            .features(n_features)
+            .build()
+            .expect("invalid quick config");
+        Self::new(config, n_classes, threshold)
+    }
+}
+
+impl crate::model::TsetlinModel<Vec<u8>, usize> for MultiClass {
+    fn fit(&mut self, x: &[Vec<u8>], y: &[usize], epochs: usize, seed: u64) {
+        MultiClass::fit(self, x, y, epochs, seed);
+    }
+
+    fn predict(&self, x: &Vec<u8>) -> usize {
+        MultiClass::predict(self, x)
+    }
+
+    fn evaluate(&self, x: &[Vec<u8>], y: &[usize]) -> f32 {
+        MultiClass::evaluate(self, x, y)
     }
 }
 

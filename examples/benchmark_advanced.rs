@@ -17,7 +17,9 @@ fn generate_data(
     let mut rng = Xoshiro256PlusPlus::seed_from_u64(seed);
 
     let gen_sample = |rng: &mut Xoshiro256PlusPlus| -> (Vec<u8>, u8) {
-        let mut x: Vec<u8> = (0..n_features).map(|_| rng.random_bool(0.5) as u8).collect();
+        let mut x: Vec<u8> = (0..n_features)
+            .map(|_| rng.random_bool(0.5) as u8)
+            .collect();
         let label = match pattern {
             "xor" => (x[0] ^ x[1]) as u8,
             "and" => (x[0] & x[1]) as u8,
@@ -47,10 +49,8 @@ fn generate_data(
         (x, label)
     };
 
-    let (x_train, y_train): (Vec<_>, Vec<_>) =
-        (0..n_train).map(|_| gen_sample(&mut rng)).unzip();
-    let (x_test, y_test): (Vec<_>, Vec<_>) =
-        (0..n_test).map(|_| gen_sample(&mut rng)).unzip();
+    let (x_train, y_train): (Vec<_>, Vec<_>) = (0..n_train).map(|_| gen_sample(&mut rng)).unzip();
+    let (x_test, y_test): (Vec<_>, Vec<_>) = (0..n_test).map(|_| gen_sample(&mut rng)).unzip();
 
     (x_train, y_train, x_test, y_test)
 }

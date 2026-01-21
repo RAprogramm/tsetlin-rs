@@ -1,18 +1,24 @@
-//! Training options and results.
+//! Training options, callbacks, and results.
 
 #[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec::Vec};
+#[cfg(feature = "std")]
+use std::boxed::Box;
 
-/// # Overview
+/// Progress callback type for training.
 ///
+/// Called after each epoch with (epoch, accuracy).
+/// Return `false` to stop training early.
+pub type ProgressCallback = Box<dyn FnMut(usize, f32) -> bool + Send>;
+
 /// Options for training a Tsetlin Machine.
-#[derive(Debug, Clone)]
 pub struct FitOptions {
     pub epochs:     usize,
     pub seed:       u64,
     pub early_stop: Option<EarlyStop>,
     pub shuffle:    bool,
-    pub verbose:    bool
+    pub verbose:    bool,
+    pub callback:   Option<ProgressCallback>
 }
 
 impl Default for FitOptions {
@@ -22,26 +28,44 @@ impl Default for FitOptions {
             seed:       42,
             early_stop: None,
             shuffle:    true,
-            verbose:    false
+            verbose:    false,
+            callback:   None
         }
     }
 }
 
+impl core::fmt::Debug for FitOptions {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("FitOptions")
+            .field("epochs", &self.epochs)
+            .field("seed", &self.seed)
+            .field("early_stop", &self.early_stop)
+            .field("shuffle", &self.shuffle)
+            .field("verbose", &self.verbose)
+            .field("callback", &self.callback.as_ref().map(|_| "..."))
+            .finish()
+    }
+}
+
 impl FitOptions {
-    /// # Overview
-    ///
     /// Creates options with given epochs and seed.
+    #[must_use]
     pub fn new(epochs: usize, seed: u64) -> Self {
         Self {
             epochs,
             seed,
-            ..Default::default()
+            early_stop: None,
+            shuffle: true,
+            verbose: false,
+            callback: None
         }
     }
 
-    /// # Overview
-    ///
     /// Enables early stopping with patience.
+    ///
+    /// Training stops if accuracy doesn't improve by `min_delta`
+    /// for `patience` consecutive epochs.
+    #[must_use]
     pub fn with_early_stop(mut self, patience: usize, min_delta: f32) -> Self {
         self.early_stop = Some(EarlyStop {
             patience,
@@ -50,36 +74,62 @@ impl FitOptions {
         self
     }
 
-    /// # Overview
-    ///
-    /// Disables shuffling.
+    /// Disables shuffling of training data.
+    #[must_use]
     pub fn no_shuffle(mut self) -> Self {
         self.shuffle = false;
         self
     }
+
+    /// Sets progress callback.
+    ///
+    /// The callback receives (epoch, accuracy) after each epoch.
+    /// Return `false` to stop training early.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let opts = FitOptions::new(100, 42)
+    ///     .with_callback(|epoch, acc| {
+    ///         println!("Epoch {}: {:.1}%", epoch, acc * 100.0);
+    ///         true  // continue training
+    ///     });
+    /// ```
+    #[must_use]
+    pub fn with_callback<F>(mut self, callback: F) -> Self
+    where
+        F: FnMut(usize, f32) -> bool + Send + 'static
+    {
+        self.callback = Some(Box::new(callback));
+        self
+    }
 }
 
-/// # Overview
-///
 /// Early stopping configuration.
 #[derive(Debug, Clone, Copy)]
 pub struct EarlyStop {
+    /// Number of epochs without improvement before stopping.
     pub patience:  usize,
+    /// Minimum improvement required to reset patience counter.
     pub min_delta: f32
 }
 
-/// # Overview
-///
 /// Result of training.
 #[derive(Debug, Clone)]
 pub struct FitResult {
+    /// Number of epochs actually run.
     pub epochs_run:     usize,
+    /// Final accuracy on training data.
     pub final_accuracy: f32,
+    /// Whether training stopped early.
     pub stopped_early:  bool,
+    /// Accuracy history per epoch.
     pub history:        Vec<f32>
 }
 
 impl FitResult {
+    /// Creates a new FitResult.
+    #[must_use]
     pub fn new(epochs_run: usize, final_accuracy: f32, stopped_early: bool) -> Self {
         Self {
             epochs_run,
@@ -88,11 +138,25 @@ impl FitResult {
             history: Vec::new()
         }
     }
+
+    /// Creates FitResult with accuracy history.
+    #[must_use]
+    pub fn with_history(
+        epochs_run: usize,
+        final_accuracy: f32,
+        stopped_early: bool,
+        history: Vec<f32>
+    ) -> Self {
+        Self {
+            epochs_run,
+            final_accuracy,
+            stopped_early,
+            history
+        }
+    }
 }
 
-/// # Overview
-///
-/// Tracks early stopping state.
+/// Tracks early stopping state during training.
 #[derive(Debug)]
 pub struct EarlyStopTracker {
     patience:  usize,
@@ -102,6 +166,8 @@ pub struct EarlyStopTracker {
 }
 
 impl EarlyStopTracker {
+    /// Creates tracker from early stop config.
+    #[must_use]
     pub fn new(config: &EarlyStop) -> Self {
         Self {
             patience:  config.patience,
@@ -111,9 +177,10 @@ impl EarlyStopTracker {
         }
     }
 
-    /// # Overview
+    /// Updates tracker with new accuracy.
     ///
-    /// Updates tracker. Returns true if should stop.
+    /// Returns `true` if training should stop (no improvement for patience
+    /// epochs).
     pub fn update(&mut self, accuracy: f32) -> bool {
         if accuracy > self.best + self.min_delta {
             self.best = accuracy;
