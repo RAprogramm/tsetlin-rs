@@ -182,13 +182,23 @@ jobs:
           shared-key: stable
           cache-targets: true
 
-      - name: Generate coverage
-        run: cargo llvm-cov --features "parallel,serde" --lcov --output-path lcov.info
+      - name: Run tests with coverage
+        run: |
+          cargo llvm-cov --features "parallel,serde" --lcov --output-path lcov.info
+          cargo test --features "parallel,serde" -- -Z unstable-options --format json > test-results.json || true
 
-      - uses: codecov/codecov-action@v5
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: lcov.info
           fail_ci_if_error: false
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   # ============================================================================
   # STAGE 5: Changelog (every push, skip bot commits)

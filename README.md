@@ -28,6 +28,7 @@ A professional Rust implementation of the Tsetlin Machine algorithm for interpre
 - [Feature Flags](#feature-flags)
 - [API Overview](#api-overview)
 - [Algorithm Details](#algorithm-details)
+- [Coverage](#coverage)
 - [In Memory of Michael Tsetlin](#in-memory-of-michael-tsetlin)
 - [Based On](#based-on)
 - [License](#license)
@@ -581,6 +582,54 @@ negated: [u64; 2]  // 16 bytes
 | SmallBitwiseClause | 65 bytes | 545 bytes | 2KB |
 
 </details>
+
+<div align="right"><a href="#top">Back to top</a></div>
+
+---
+
+## Coverage
+
+<details>
+<summary><strong>Coverage Visualization</strong></summary>
+
+### Sunburst
+
+The inner-most circle represents the entire project. Moving outward shows folders, and finally individual files. The **size** of each slice represents the number of statements, while the **color** indicates coverage percentage.
+
+<p align="center">
+  <a href="https://codecov.io/gh/RAprogramm/tsetlin-rs">
+    <img src="https://codecov.io/gh/RAprogramm/tsetlin-rs/graphs/sunburst.svg?token=dSDoNSNudX" alt="Sunburst"/>
+  </a>
+</p>
+
+---
+
+### Grid
+
+Each block represents a single file in the project. The **size** of each block represents the number of statements, while the **color** indicates coverage percentage.
+
+<p align="center">
+  <a href="https://codecov.io/gh/RAprogramm/tsetlin-rs">
+    <img src="https://codecov.io/gh/RAprogramm/tsetlin-rs/graphs/tree.svg?token=dSDoNSNudX" alt="Grid"/>
+  </a>
+</p>
+
+---
+
+### Icicle
+
+The top section represents the entire project. Below it are folders, and finally individual files. The **size** of each slice represents the number of statements, while the **color** indicates coverage percentage.
+
+<p align="center">
+  <a href="https://codecov.io/gh/RAprogramm/tsetlin-rs">
+    <img src="https://codecov.io/gh/RAprogramm/tsetlin-rs/graphs/icicle.svg?token=dSDoNSNudX" alt="Icicle"/>
+  </a>
+</p>
+
+</details>
+
+> [!TIP]
+> Click on any graph to explore detailed coverage reports on Codecov.
 
 <div align="right"><a href="#top">Back to top</a></div>
 
