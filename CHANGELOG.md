@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- [`cc2f365`](https://github.com/RAprogramm/tsetlin-rs/commit/cc2f365eef20d4f0abba8a9ca6392bee4ffa3c66) 🔧 ci: use CRATESIO secret name
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`9dbf804`](https://github.com/RAprogramm/tsetlin-rs/commit/9dbf804e35d99f958edcf7824d7a344bf967f228) 🔧 ci: add auto-publish to crates.io on version bump
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
 - [`0a1d3b1`](https://github.com/RAprogramm/tsetlin-rs/commit/0a1d3b1509005cc8e943d8ad814cfb1d7189c9a9) 📝 add: photo
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
 
