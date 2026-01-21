@@ -213,53 +213,110 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const { execSync } = require('child_process');
 
-            const { data: commits } = await github.rest.repos.listCommits({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 100
-            });
+            // Get version from Cargo.toml
+            const cargo = fs.readFileSync('Cargo.toml', 'utf8');
+            const versionMatch = cargo.match(/^version\s*=\s*"([^"]+)"/m);
+            const currentVersion = versionMatch ? `v${versionMatch[1]}` : null;
 
-            const grouped = {};
-            for (const commit of commits) {
-              const date = commit.commit.author.date.split('T')[0];
-              if (!grouped[date]) grouped[date] = [];
+            // Read existing changelog
+            let existing = '';
+            let existingVersions = new Set();
+            let unreleasedContent = '';
 
-              const author = commit.author;
-              const msg = commit.commit.message.split('\n')[0];
-              const sha = commit.sha.substring(0, 7);
+            if (fs.existsSync('CHANGELOG.md')) {
+              existing = fs.readFileSync('CHANGELOG.md', 'utf8');
+              const versionRegex = /^## (v[\d.]+)/gm;
+              let match;
+              while ((match = versionRegex.exec(existing)) !== null) {
+                existingVersions.add(match[1]);
+              }
+              // Extract unreleased content
+              const unreleasedMatch = existing.match(/## Unreleased\n\n([\s\S]*?)(?=\n## v|\n*$)/);
+              if (unreleasedMatch) {
+                unreleasedContent = unreleasedMatch[1].trim();
+              }
+            }
 
-              grouped[date].push({
-                sha: commit.sha,
-                shaShort: sha,
-                message: msg,
-                author: author ? author.login : commit.commit.author.name,
-                avatarUrl: author ? author.avatar_url : null,
-                authorUrl: author ? author.html_url : null,
-                url: commit.html_url
+            // Get commits since last tag or all commits
+            let lastTag = '';
+            try {
+              lastTag = execSync('git describe --tags --abbrev=0 2>/dev/null || echo ""', { encoding: 'utf8' }).trim();
+            } catch {}
+
+            const range = lastTag ? `${lastTag}..HEAD` : 'HEAD';
+            const gitLog = execSync(`git log ${range} --pretty=format:"%H|%h|%s|%an" --no-merges`, { encoding: 'utf8' });
+
+            const newCommits = [];
+            for (const line of gitLog.split('\n').filter(l => l)) {
+              const [sha, shaShort, message, author] = line.split('|');
+              if (message.includes('chore: update changelog')) continue;
+
+              // Get author info from GitHub
+              const { data: commitData } = await github.rest.repos.getCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: sha
+              });
+
+              const ghAuthor = commitData.author;
+              newCommits.push({
+                sha,
+                shaShort,
+                message,
+                author: ghAuthor ? ghAuthor.login : author,
+                avatarUrl: ghAuthor ? ghAuthor.avatar_url : null,
+                authorUrl: ghAuthor ? ghAuthor.html_url : null,
+                url: commitData.html_url
               });
             }
 
+            // Build changelog
             let changelog = '# Changelog\n\n';
             changelog += 'All notable changes to this project.\n\n';
             changelog += '---\n\n';
 
-            const dates = Object.keys(grouped).sort().reverse();
+            // Determine if we should release (on main with new version)
+            const isMain = context.ref === 'refs/heads/main';
+            const shouldRelease = isMain && currentVersion && !existingVersions.has(currentVersion);
 
-            for (const date of dates) {
-              changelog += `## ${date}\n\n`;
-
-              for (const c of grouped[date]) {
+            if (shouldRelease && newCommits.length > 0) {
+              // Release: put commits under version
+              changelog += `## ${currentVersion}\n\n`;
+              for (const c of newCommits) {
                 const avatar = c.avatarUrl
                   ? `<img src="${c.avatarUrl}" width="20" height="20" style="border-radius:50%"/> `
                   : '';
                 const authorLink = c.authorUrl
                   ? `[**${c.author}**](${c.authorUrl})`
                   : `**${c.author}**`;
-
                 changelog += `- [\`${c.shaShort}\`](${c.url}) ${c.message}\n`;
                 changelog += `  ${avatar}${authorLink}\n\n`;
               }
+            } else {
+              // Unreleased
+              changelog += '## Unreleased\n\n';
+              if (newCommits.length > 0) {
+                for (const c of newCommits) {
+                  const avatar = c.avatarUrl
+                    ? `<img src="${c.avatarUrl}" width="20" height="20" style="border-radius:50%"/> `
+                    : '';
+                  const authorLink = c.authorUrl
+                    ? `[**${c.author}**](${c.authorUrl})`
+                    : `**${c.author}**`;
+                  changelog += `- [\`${c.shaShort}\`](${c.url}) ${c.message}\n`;
+                  changelog += `  ${avatar}${authorLink}\n\n`;
+                }
+              } else {
+                changelog += '*No changes yet.*\n\n';
+              }
+            }
+
+            // Append existing versions
+            const existingVersionsContent = existing.match(/## v[\d.][\s\S]*/);
+            if (existingVersionsContent) {
+              changelog += existingVersionsContent[0];
             }
 
             fs.writeFileSync('CHANGELOG.md', changelog);
