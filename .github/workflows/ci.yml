@@ -1,0 +1,286 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+# Cancel in-progress runs for same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================================================
+  # STAGE 1: Quick checks (run in parallel, fast feedback)
+  # ============================================================================
+
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - run: cargo +nightly fmt --all -- --check
+
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: check
+          shared-key: stable
+
+      - run: cargo check --all-features --locked
+
+  # ============================================================================
+  # STAGE 2: Linting & Analysis (depends on check)
+  # ============================================================================
+
+  clippy:
+    name: Clippy
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: clippy
+          shared-key: stable
+
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+
+  doc:
+    name: Documentation
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: doc
+          shared-key: stable
+
+      - run: cargo doc --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: -Dwarnings
+
+  # ============================================================================
+  # STAGE 3: Testing (depends on clippy)
+  # ============================================================================
+
+  test:
+    name: Test
+    needs: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: test
+          shared-key: stable
+          cache-targets: true
+
+      - name: Run tests
+        run: cargo test --all-features
+
+      - name: Run doc tests
+        run: cargo test --doc --all-features
+
+  test-no-std:
+    name: Test no_std
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: no-std
+          shared-key: stable
+
+      - run: cargo check --no-default-features
+
+  test-features:
+    name: Test Feature Combinations
+    needs: clippy
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        features:
+          - ""
+          - "serde"
+          - "parallel"
+          - "parallel,serde"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: features-${{ matrix.features || 'default' }}
+          shared-key: stable
+
+      - name: Test with features [${{ matrix.features || 'default' }}]
+        run: cargo test --features "${{ matrix.features }}"
+
+  # ============================================================================
+  # STAGE 4: Coverage (depends on tests)
+  # ============================================================================
+
+  coverage:
+    name: Coverage
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@cargo-llvm-cov
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: coverage
+          shared-key: stable
+          cache-targets: true
+
+      - name: Generate coverage
+        run: cargo llvm-cov --all-features --lcov --output-path lcov.info
+
+      - uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          fail_ci_if_error: false
+
+  # ============================================================================
+  # STAGE 5: Release automation (only on main push)
+  # ============================================================================
+
+  changelog:
+    name: Changelog
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [test, test-no-std, doc]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Generate Changelog
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            const { data: commits } = await github.rest.repos.listCommits({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+
+            const grouped = {};
+            for (const commit of commits) {
+              const date = commit.commit.author.date.split('T')[0];
+              if (!grouped[date]) grouped[date] = [];
+
+              const author = commit.author;
+              const msg = commit.commit.message.split('\n')[0];
+              const sha = commit.sha.substring(0, 7);
+
+              grouped[date].push({
+                sha: commit.sha,
+                shaShort: sha,
+                message: msg,
+                author: author ? author.login : commit.commit.author.name,
+                avatarUrl: author ? author.avatar_url : null,
+                authorUrl: author ? author.html_url : null,
+                url: commit.html_url
+              });
+            }
+
+            let changelog = '# Changelog\n\n';
+            changelog += 'All notable changes to this project.\n\n';
+            changelog += '---\n\n';
+
+            const dates = Object.keys(grouped).sort().reverse();
+
+            for (const date of dates) {
+              changelog += `## ${date}\n\n`;
+
+              for (const c of grouped[date]) {
+                const avatar = c.avatarUrl
+                  ? `<img src="${c.avatarUrl}" width="20" height="20" style="border-radius:50%"/> `
+                  : '';
+                const authorLink = c.authorUrl
+                  ? `[**${c.author}**](${c.authorUrl})`
+                  : `**${c.author}**`;
+
+                changelog += `- [\`${c.shaShort}\`](${c.url}) ${c.message}\n`;
+                changelog += `  ${avatar}${authorLink}\n\n`;
+              }
+            }
+
+            fs.writeFileSync('CHANGELOG.md', changelog);
+
+      - name: Commit Changelog
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git diff --staged --quiet || git commit -m "chore: update changelog"
+          git push
+
+  # ============================================================================
+  # Final status check (for branch protection)
+  # ============================================================================
+
+  ci-success:
+    name: CI Success
+    if: always()
+    needs: [fmt, check, clippy, doc, test, test-no-std, test-features, coverage]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [[ "${{ needs.fmt.result }}" != "success" ]] || \
+             [[ "${{ needs.check.result }}" != "success" ]] || \
+             [[ "${{ needs.clippy.result }}" != "success" ]] || \
+             [[ "${{ needs.doc.result }}" != "success" ]] || \
+             [[ "${{ needs.test.result }}" != "success" ]] || \
+             [[ "${{ needs.test-no-std.result }}" != "success" ]] || \
+             [[ "${{ needs.test-features.result }}" != "success" ]] || \
+             [[ "${{ needs.coverage.result }}" != "success" ]]; then
+            echo "One or more jobs failed"
+            exit 1
+          fi
+          echo "All CI checks passed!"
