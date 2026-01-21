@@ -2,12 +2,16 @@
 
 # tsetlin-rs
 
-[![Crates.io](https://img.shields.io/crates/v/tsetlin-rs.svg)](https://crates.io/crates/tsetlin-rs)
-[![Documentation](https://docs.rs/tsetlin-rs/badge.svg)](https://docs.rs/tsetlin-rs)
-[![CI](https://github.com/RAprogramm/tsetlin-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/RAprogramm/tsetlin-rs/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/RAprogramm/tsetlin-rs/graph/badge.svg)](https://codecov.io/gh/RAprogramm/tsetlin-rs)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.92%2B-orange.svg)](https://www.rust-lang.org)
+<p align="center">
+  <a href="https://crates.io/crates/tsetlin-rs"><img src="https://img.shields.io/crates/v/tsetlin-rs?style=for-the-badge&logo=rust&logoColor=white&label=crates.io&color=e6522c" alt="Crates.io"/></a>
+  <a href="https://docs.rs/tsetlin-rs"><img src="https://img.shields.io/docsrs/tsetlin-rs?style=for-the-badge&logo=docsdotrs&logoColor=white&label=docs.rs&color=blue" alt="docs.rs"/></a>
+  <a href="https://github.com/RAprogramm/tsetlin-rs/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/RAprogramm/tsetlin-rs/ci.yml?style=for-the-badge&logo=githubactions&logoColor=white&label=CI" alt="CI"/></a>
+</p>
+<p align="center">
+  <a href="https://codecov.io/gh/RAprogramm/tsetlin-rs"><img src="https://img.shields.io/codecov/c/github/RAprogramm/tsetlin-rs?style=for-the-badge&logo=codecov&logoColor=white&color=f01f7a" alt="codecov"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge&logo=opensourceinitiative&logoColor=white" alt="License"/></a>
+  <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/rust-1.92+-93450a?style=for-the-badge&logo=rust&logoColor=white" alt="Rust"/></a>
+</p>
 
 A professional Rust implementation of the Tsetlin Machine algorithm for interpretable machine learning.
 
