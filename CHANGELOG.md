@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- [`75cf317`](https://github.com/RAprogramm/tsetlin-rs/commit/75cf317ade05faad5ca4625e41465e18a4270f35) 🔧 **ci(deps):** bump actions/github-script from 7 to 8 in the actions group
+  <img src="https://avatars.githubusercontent.com/in/29110?v=4" width="20" height="20" style="border-radius:50%"/> [**dependabot[bot]**](https://github.com/apps/dependabot)
+
 - [`2a17528`](https://github.com/RAprogramm/tsetlin-rs/commit/2a175286fa057bcdd5bcbdf49256d35e9bbc5c15) fix: changelog preserves all existing entries
   <img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%"/> [**RAprogramm**](https://github.com/RAprogramm)
 
