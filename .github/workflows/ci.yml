@@ -43,7 +43,7 @@ jobs:
           prefix-key: check
           shared-key: stable
 
-      - run: cargo check --all-features --locked
+      - run: cargo check --all-features
 
   # ============================================================================
   # STAGE 2: Linting & Analysis (depends on check)
