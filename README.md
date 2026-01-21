@@ -504,6 +504,20 @@ negated: [u64; 2]  // 16 bytes
 
 </details>
 
+## Based On
+
+This Rust implementation is based on the original Tsetlin Machine algorithm:
+
+**Paper:** [The Tsetlin Machine - A Game Theoretic Bandit Driven Approach to Optimal Pattern Recognition with Propositional Logic](https://arxiv.org/abs/1804.01508)
+*Ole-Christoffer Granmo, 2018*
+
+**Original C Implementation:** [cair/TsetlinMachineC](https://github.com/cair/TsetlinMachineC)
+
+**Related Resources:**
+- [cair/TsetlinMachine](https://github.com/cair/TsetlinMachine) — Python implementation with datasets
+- [cair/pyTsetlinMachine](https://github.com/cair/pyTsetlinMachine) — Extended Python library
+- [cair/tmu](https://github.com/cair/tmu) — Unified TM with CUDA support
+
 ## License
 
 MIT
