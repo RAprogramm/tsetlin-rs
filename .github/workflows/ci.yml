@@ -291,7 +291,7 @@ jobs:
                     ci: '🔧', chore: '🔨', revert: '⏪'
                   };
                   const emoji = types[type] || '📝';
-                  linkedMessage = `${issue}${emoji} **${type}${scope}:** ${desc}`;
+                  linkedMessage = `${issue}${emoji} ${type}${scope}: ${desc}`;
                 }
 
                 newCommits.push(`- [\`${shaShort}\`](${commitData.html_url}) ${linkedMessage}\n  ${avatar}${authorLink}`);
