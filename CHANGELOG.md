@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- [`75dfee6`](https://github.com/RAprogramm/tsetlin-rs/commit/75dfee6ab498600051583023098ded8fa64595e6) 🐛 fix: improve crates.io version check and add REUSE badge
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`497931d`](https://github.com/RAprogramm/tsetlin-rs/commit/497931d0aea301d118df922664ec971b00fdbc64) 🔧 ci: add Codecov token and test results upload
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
 - [`de54204`](https://github.com/RAprogramm/tsetlin-rs/commit/de5420471a8ffa0d232d4279e7a69326f400e37f) 🔨 chore: add REUSE license files
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
 
