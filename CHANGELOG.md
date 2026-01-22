@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- [`d9bdd34`](https://github.com/RAprogramm/tsetlin-rs/commit/d9bdd347f470ec67be2226092cdeafa9854f2416) [#3](https://github.com/RAprogramm/tsetlin-rs/issues/3) ✨ feat: add ClauseBank SoA storage for cache-efficient operations
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
 - [`8742f6f`](https://github.com/RAprogramm/tsetlin-rs/commit/8742f6f8e84fa615c8e072f90d7baec060325226) [#3](https://github.com/RAprogramm/tsetlin-rs/issues/3) 🔨 chore: start SoA layout implementation
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
 
