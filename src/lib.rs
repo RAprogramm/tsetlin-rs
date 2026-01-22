@@ -57,6 +57,7 @@ extern crate alloc;
 
 mod automaton;
 mod binary;
+mod bitplane;
 mod bitwise;
 mod clause;
 mod clause_bank;
@@ -80,6 +81,7 @@ pub mod simd;
 
 pub use automaton::Automaton;
 pub use binary::{AdvancedOptions, TsetlinMachine};
+pub use bitplane::BitPlaneBank;
 pub use bitwise::{BitwiseClause, pack_batch, pack_input};
 pub use clause::Clause;
 pub use clause_bank::ClauseBank;
