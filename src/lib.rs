@@ -71,6 +71,7 @@ mod multiclass;
 mod regression;
 mod rule;
 mod small;
+mod sparse;
 mod training;
 pub mod utils;
 
@@ -103,4 +104,5 @@ pub use small::{
     Clause32, Clause64, SmallBitwiseClause, SmallClause, SmallTsetlinMachine, TM2x20, TM4x40,
     TM8x80, TM16x160, pack_input_small
 };
+pub use sparse::{SparseClause, SparseClauseBank, SparseMemoryStats, SparseTsetlinMachine};
 pub use training::{EarlyStop, FitOptions, FitResult};
