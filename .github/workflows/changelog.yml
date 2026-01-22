@@ -24,59 +24,78 @@ jobs:
             const fs = require('fs');
             const { execSync } = require('child_process');
 
-            const cargo = fs.readFileSync('Cargo.toml', 'utf8');
-            const versionMatch = cargo.match(/^version\s*=\s*"([^"]+)"/m);
-            const currentVersion = versionMatch ? `v${versionMatch[1]}` : 'v0.0.0';
-            console.log(`Current version: ${currentVersion}`);
+            // Store all entries by SHA (guarantees no duplicates)
+            // Map<SHA, { version: string, entry: string }>
+            const entriesBySha = new Map();
 
-            let existingSHAs = new Set();
-            let existingVersions = new Set();
-            let unreleasedEntries = [];
-            let versionedSections = [];
-
+            // Parse existing changelog
             if (fs.existsSync('CHANGELOG.md')) {
               const existing = fs.readFileSync('CHANGELOG.md', 'utf8');
-              const shaRegex = /\[`([a-f0-9]{7})`\]/g;
-              let m;
-              while ((m = shaRegex.exec(existing)) !== null) {
-                existingSHAs.add(m[1]);
-              }
-              const unreleasedMatch = existing.match(/## Unreleased\n\n([\s\S]*?)(?=\n## v|$)/);
-              if (unreleasedMatch && unreleasedMatch[1].trim()) {
-                unreleasedEntries = unreleasedMatch[1].trim().split('\n\n').filter(e => e.startsWith('- ['));
-              }
-              const versionedMatch = existing.match(/\n(## v[\d.]+[\s\S]*)/);
-              if (versionedMatch) {
-                versionedSections = versionedMatch[1].split(/(?=\n## v[\d.]+)/).filter(s => s.trim());
-              }
-              const versionRegex = /^## (v[\d.]+)/gm;
-              while ((m = versionRegex.exec(existing)) !== null) {
-                existingVersions.add(m[1]);
+
+              // Split by version headers
+              const sections = existing.split(/(?=^## v[\d.]+)/m);
+
+              for (const section of sections) {
+                const versionMatch = section.match(/^## (v[\d.]+)/);
+                if (!versionMatch) continue;
+                const version = versionMatch[1];
+
+                // Extract entries (each starts with "- [`sha`]")
+                const entryRegex = /^- \[`([a-f0-9]{7})`\][^\n]*\n  [^\n]+/gm;
+                let match;
+                while ((match = entryRegex.exec(section)) !== null) {
+                  const sha = match[1];
+                  const entry = match[0];
+                  if (!entriesBySha.has(sha)) {
+                    entriesBySha.set(sha, { version, entry });
+                  }
+                }
               }
             }
 
-            console.log(`Existing versions: ${[...existingVersions].join(', ') || 'none'}`);
-            const gitLog = execSync('git log -100 --pretty=format:"%H|%h|%s|%an" --no-merges', { encoding: 'utf8' });
-            const newCommits = [];
+            console.log(`Existing entries: ${entriesBySha.size}`);
 
+            // Get commits from git
+            const gitLog = execSync('git log -200 --pretty=format:"%H|%h|%s|%an" --no-merges', { encoding: 'utf8' });
+
+            let newCount = 0;
             for (const line of gitLog.split('\n').filter(l => l)) {
               const [sha, shaShort, message, author] = line.split('|');
-              if (existingSHAs.has(shaShort)) continue;
+
+              // Skip if already in changelog
+              if (entriesBySha.has(shaShort)) continue;
+
+              // Skip changelog commits and merges
               if (message.includes('chore: update changelog')) continue;
               if (message.includes('Merge pull request')) continue;
 
+              // Get version from Cargo.toml at this commit
+              let version = 'v0.0.0';
+              try {
+                const cargoAtCommit = execSync(`git show ${sha}:Cargo.toml 2>/dev/null`, { encoding: 'utf8' });
+                const vMatch = cargoAtCommit.match(/^version\s*=\s*"([^"]+)"/m);
+                if (vMatch) version = `v${vMatch[1]}`;
+              } catch (e) {
+                console.log(`Could not get version for ${shaShort}`);
+              }
+
+              // Get commit details from GitHub API
               try {
                 const { data: commitData } = await github.rest.repos.getCommit({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   ref: sha
                 });
+
                 const ghAuthor = commitData.author;
                 const authorAvatar = ghAuthor?.avatar_url
                   ? `[<img src="${ghAuthor.avatar_url}" width="20" height="20" style="border-radius:50%" title="${ghAuthor.login}"/>](${ghAuthor.html_url})`
                   : `**${author}**`;
+
                 const repoUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
                 let linkedMessage = message.replace(/#(\d+)/g, `[#$1](${repoUrl}/issues/$1)`);
+
+                // Add emoji for conventional commits
                 const typeMatch = linkedMessage.match(/^(\[#\d+\]\([^)]+\)\s+)?(\w+)(\([^)]+\))?:\s*(.+)$/);
                 if (typeMatch) {
                   const [, issue = '', type, scope = '', desc] = typeMatch;
@@ -88,27 +107,48 @@ jobs:
                   const emoji = types[type] || '📝';
                   linkedMessage = `${issue}${emoji} ${type}${scope}: ${desc}`;
                 }
-                newCommits.push(`- [\`${shaShort}\`](${commitData.html_url}) ${linkedMessage}\n  ${authorAvatar}`);
+
+                const entry = `- [\`${shaShort}\`](${commitData.html_url}) ${linkedMessage}\n  ${authorAvatar}`;
+                entriesBySha.set(shaShort, { version, entry });
+                newCount++;
               } catch (e) {
-                console.log(`Skip commit ${shaShort}: ${e.message}`);
+                console.log(`Skip ${shaShort}: ${e.message}`);
               }
             }
 
-            console.log(`New commits found: ${newCommits.length}`);
-            let changelog = '# Changelog\n\n---\n\n';
-            const isNewVersion = !existingVersions.has(currentVersion);
+            console.log(`New entries added: ${newCount}`);
 
-            if (isNewVersion && newCommits.length > 0) {
-              changelog += `## ${currentVersion}\n\n`;
-              changelog += newCommits.join('\n\n') + '\n\n';
+            // Group entries by version
+            const byVersion = new Map();
+            for (const [sha, { version, entry }] of entriesBySha) {
+              if (!byVersion.has(version)) {
+                byVersion.set(version, []);
+              }
+              byVersion.get(version).push(entry);
             }
-            if (unreleasedEntries.length > 0 && (existingVersions.has(currentVersion) || newCommits.length === 0)) {
-              changelog += '## Unreleased\n\n';
-              changelog += unreleasedEntries.join('\n\n') + '\n\n';
+
+            // Sort versions (newest first)
+            const sortedVersions = [...byVersion.keys()].sort((a, b) => {
+              const partsA = a.slice(1).split('.').map(Number);
+              const partsB = b.slice(1).split('.').map(Number);
+              for (let i = 0; i < 3; i++) {
+                if ((partsA[i] || 0) !== (partsB[i] || 0)) {
+                  return (partsB[i] || 0) - (partsA[i] || 0);
+                }
+              }
+              return 0;
+            });
+
+            console.log(`Versions in changelog: ${sortedVersions.join(', ')}`);
+
+            // Build changelog
+            let changelog = '# Changelog\n\n---\n\n';
+
+            for (const version of sortedVersions) {
+              changelog += `## ${version}\n\n`;
+              changelog += byVersion.get(version).join('\n\n') + '\n\n';
             }
-            if (versionedSections.length > 0) {
-              changelog += versionedSections.join('\n');
-            }
+
             fs.writeFileSync('CHANGELOG.md', changelog);
 
       - run: |
