@@ -26,6 +26,7 @@
 //! - **Adaptive Threshold** - Dynamic T adjustment during training
 //! - **Clause Pruning** - Automatic reset of dead/ineffective clauses
 //! - **Const Generics** - Zero-allocation stack types with loop unrolling
+//! - **Lock-Free Parallel Training** - Async local voting tallies (ICML 2021)
 //!
 //! # Feature Flags
 //!

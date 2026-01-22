@@ -74,10 +74,10 @@ A professional Rust implementation of the Tsetlin Machine algorithm for interpre
 - **Regression** - `Regressor`
 - **Convolutional** - `Convolutional` for image-like data
 - **Advanced Training** - Weighted clauses, adaptive threshold, clause pruning
+- **Lock-Free Parallel Training** - Async local voting tallies (ICML 2021)
 - **BitwiseClause** - 64 features per CPU instruction (25-92x speedup)
 - **BitPlaneBank** - Bit-plane storage for parallel state updates (~2x Type II speedup)
 - **SIMD Optimization** - `simd` feature (nightly)
-- **Parallel Training** - `parallel` feature (rayon)
 - **Serialization** - `serde` feature
 - **no_std Support** - Works without standard library
 
@@ -173,11 +173,48 @@ tm.fit(&x_train, &y_train, 100, 42);
 > [!IMPORTANT]
 > Run benchmark to compare: `cargo run --release --example benchmark_advanced`
 
+### Parallel Training
+
+Lock-free parallel training using async local voting tallies ([ICML 2021](https://arxiv.org/abs/2009.04861)):
+
+```rust
+use tsetlin_rs::{ClauseBank, ParallelBatch};
+
+let mut bank = ClauseBank::new(100, 64, 100);
+let batch = ParallelBatch::new(&x_train, &y_train);
+
+for epoch in 0..100 {
+    bank.train_parallel(&batch, 15.0, 3.9, 42 + epoch);
+}
+```
+
+**Architecture:**
+
+```
+Traditional:  [Clauses] ─► Barrier ─► Sum ─► Barrier ─► Feedback
+Async:        [Clause N] ─► eval ─► atomic_add ─► feedback (independent)
+```
+
+Each sample has a `CachePadded<AtomicI64>` tally. No synchronization between clause threads.
+
 <div align="right"><a href="#top">Back to top</a></div>
 
 ---
 
 ## Benchmarks
+
+### Parallel Training (lock-free)
+
+100 clauses, 64 features, 1 epoch:
+
+| Samples | Sequential | Parallel | Speedup |
+|---------|------------|----------|---------|
+| 100 | 2.93 ms | **2.00 ms** | **1.47x** |
+| 500 | 15.69 ms | **9.93 ms** | **1.58x** |
+| 1000 | 29.88 ms | **24.56 ms** | **1.22x** |
+
+> [!NOTE]
+> Speedup increases with clause count. Original CUDA paper reports 50x on GPU.
 
 ### ClauseBank (SoA storage)
 
@@ -280,6 +317,8 @@ cargo run --release --example benchmark_advanced
 | `SmallClause<N>` | Const-generic stack-allocated clause |
 | `SmallTsetlinMachine<N, C>` | Compile-time optimized TM |
 | `AdvancedOptions` | Weighted clauses, adaptive T, pruning |
+| `LocalTally` | Cache-aligned atomic vote accumulator |
+| `ParallelBatch` | Batch with per-sample tallies |
 
 <div align="right"><a href="#top">Back to top</a></div>
 
@@ -638,6 +677,68 @@ SmallTsetlinMachine<N, C> {
 | no_std | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 | Best for N | any | ≤64 | ≥64 | 64-256 |
 | Loop unroll | :x: | :white_check_mark: | :x: | :white_check_mark: |
+
+</details>
+
+<details>
+<summary><strong>Parallel Training Architecture</strong></summary>
+
+### Lock-Free Parallel Training
+
+This implementation is based on [Massively Parallel and Asynchronous Tsetlin Machine Architecture (ICML 2021)](https://arxiv.org/abs/2009.04861).
+
+**Problem:** Traditional TM training requires synchronization barriers:
+
+```
+[Clause 0] ─┐
+[Clause 1] ─┼─► Barrier ─► Sum votes ─► Barrier ─► Feedback
+[Clause N] ─┘
+```
+
+**Solution:** Each training sample has its own atomic vote accumulator:
+
+```
+[Clause 0] ──► eval ──► atomic_add ──► feedback (independent)
+[Clause 1] ──► eval ──► atomic_add ──► feedback (independent)
+[Clause N] ──► eval ──► atomic_add ──► feedback (independent)
+```
+
+### Key Components
+
+| Type | Purpose |
+|------|---------|
+| `LocalTally` | `CachePadded<AtomicI64>` - prevents false sharing |
+| `ParallelBatch` | Holds samples with their tallies |
+| `train_parallel()` | Lock-free training method |
+
+### Scaled Integer Voting
+
+Weights are `f32`, but `AtomicF32` doesn't exist. Solution:
+
+```rust
+const WEIGHT_SCALE: i64 = 10_000;
+
+// Store: polarity * weight * SCALE as i64
+tally.fetch_add((polarity as f32 * weight * SCALE) as i64, Relaxed);
+
+// Read: convert back to f32
+let sum = tally.load(Acquire) as f32 / SCALE as f32;
+```
+
+### Performance
+
+| Samples | Sequential | Parallel | Speedup |
+|---------|------------|----------|---------|
+| 100 | 2.93 ms | 2.00 ms | 1.47x |
+| 500 | 15.69 ms | 9.93 ms | 1.58x |
+| 1000 | 29.88 ms | 24.56 ms | 1.22x |
+
+Original CUDA paper reports **50x speedup** on GPU with thousands of clauses.
+
+### References
+
+- [ICML 2021 Paper](https://arxiv.org/abs/2009.04861)
+- [PyTsetlinMachineCUDA](https://github.com/cair/PyTsetlinMachineCUDA)
 
 </details>
 

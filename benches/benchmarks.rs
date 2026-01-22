@@ -418,6 +418,76 @@ fn bench_evaluate_all_bitmap(c: &mut Criterion) {
     group.finish();
 }
 
+#[cfg(feature = "parallel")]
+fn bench_parallel_training(c: &mut Criterion) {
+    use tsetlin_rs::ParallelBatch;
+
+    let mut group = c.benchmark_group("parallel_vs_sequential");
+
+    for n_samples in [100, 500, 1000] {
+        let n_clauses = 100;
+        let n_features = 64;
+
+        let x: Vec<Vec<u8>> = (0..n_samples)
+            .map(|i| (0..n_features).map(|j| ((i + j) % 2) as u8).collect())
+            .collect();
+        let y: Vec<u8> = (0..n_samples).map(|i| (i % 2) as u8).collect();
+
+        // Sequential training (1 epoch)
+        group.bench_with_input(
+            BenchmarkId::new("sequential", n_samples),
+            &n_samples,
+            |b, _| {
+                b.iter(|| {
+                    let config = Config::builder()
+                        .clauses(n_clauses)
+                        .features(n_features)
+                        .build()
+                        .unwrap();
+                    let mut tm = TsetlinMachine::new(config, 15);
+                    tm.fit(black_box(&x), black_box(&y), 1, 42);
+                });
+            }
+        );
+
+        // Parallel training (1 epoch)
+        group.bench_with_input(
+            BenchmarkId::new("parallel", n_samples),
+            &n_samples,
+            |b, _| {
+                b.iter(|| {
+                    let mut bank = ClauseBank::new(n_clauses, n_features, 100);
+                    let batch = ParallelBatch::new(black_box(&x), black_box(&y));
+                    bank.train_parallel(&batch, 15.0, 3.9, 42);
+                });
+            }
+        );
+    }
+
+    group.finish();
+}
+
+#[cfg(feature = "parallel")]
+criterion_group!(
+    benches,
+    bench_clause_evaluate,
+    bench_predict,
+    bench_train_epoch,
+    bench_multiclass_predict,
+    bench_feedback,
+    bench_rule_extraction,
+    bench_small_clause,
+    bench_bitwise,
+    bench_aos_vs_soa,
+    bench_bitplane_evaluate,
+    bench_bitplane_feedback,
+    bench_bitplane_increment,
+    bench_train_sample_bitmap,
+    bench_evaluate_all_bitmap,
+    bench_parallel_training
+);
+
+#[cfg(not(feature = "parallel"))]
 criterion_group!(
     benches,
     bench_clause_evaluate,
@@ -435,4 +505,5 @@ criterion_group!(
     bench_train_sample_bitmap,
     bench_evaluate_all_bitmap
 );
+
 criterion_main!(benches);

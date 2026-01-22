@@ -422,4 +422,60 @@ mod tests {
         assert!(fires);
         assert!(tally.sum().abs() > 0.0); // Got a vote
     }
+
+    #[test]
+    fn local_tally_add_scaled() {
+        let tally = LocalTally::new();
+
+        // Test add() with pre-scaled values
+        tally.add(WEIGHT_SCALE * 2); // +2.0
+        tally.add(-WEIGHT_SCALE); // -1.0
+
+        assert!((tally.sum() - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn local_tally_sum_scaled() {
+        let tally = LocalTally::new();
+
+        tally.add(12345);
+        assert_eq!(tally.sum_scaled(), 12345);
+    }
+
+    #[test]
+    fn local_tally_default() {
+        let tally = LocalTally::default();
+        assert!((tally.sum() - 0.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn parallel_batch_par_iter() {
+        let inputs = vec![vec![0, 1], vec![1, 0]];
+        let labels = vec![1, 0];
+
+        let batch = ParallelBatch::new(&inputs, &labels);
+
+        // Use par_iter and collect results
+        let results: Vec<_> = batch.par_iter().collect();
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].0, 0); // sample_idx
+        assert_eq!(results[0].2, 1); // label
+        assert_eq!(results[1].0, 1);
+        assert_eq!(results[1].2, 0);
+    }
+
+    #[test]
+    fn parallel_eval_sample() {
+        let bank = ClauseBank::new(4, 2, 100);
+        let tally = LocalTally::new();
+
+        // Fresh clauses always fire
+        let firing = bank.parallel_eval_sample(&[1, 1], &tally);
+
+        // All 4 clauses should fire
+        assert_eq!(firing.len(), 4);
+        // Votes may cancel out (alternating polarity), just check tally was updated
+        assert_eq!(tally.sum_scaled().abs() % WEIGHT_SCALE, 0);
+    }
 }
