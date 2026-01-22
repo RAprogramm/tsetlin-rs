@@ -60,6 +60,8 @@ jobs:
   # Stage 5: Changelog
   changelog:
     needs: [test, doc]
+    permissions:
+      contents: write
     uses: ./.github/workflows/changelog.yml
     with:
       enabled: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && !contains(github.event.head_commit.message, 'chore') }}
@@ -76,6 +78,8 @@ jobs:
   # Stage 7: Release
   release:
     needs: [publish, changelog]
+    permissions:
+      contents: write
     uses: ./.github/workflows/release.yml
     with:
       enabled: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -100,4 +104,6 @@ jobs:
   cleanup:
     if: always()
     needs: ci-success
+    permissions:
+      actions: write
     uses: ./.github/workflows/cleanup.yml
