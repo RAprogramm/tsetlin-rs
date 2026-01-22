@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- [`fd22202`](https://github.com/RAprogramm/tsetlin-rs/commit/fd22202cc36dd8a33d0d3e9370b536b59a006289) [#3](https://github.com/RAprogramm/tsetlin-rs/issues/3) 🔧 ci: add JUnit XML test results for Codecov Test Analytics
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`61beeff`](https://github.com/RAprogramm/tsetlin-rs/commit/61beeff696ffb68271e13e2cebbc9ae91a688b1c) [#3](https://github.com/RAprogramm/tsetlin-rs/issues/3) ✨ feat: optimize ClauseBank evaluation and add benchmarks
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
 - [`d9bdd34`](https://github.com/RAprogramm/tsetlin-rs/commit/d9bdd347f470ec67be2226092cdeafa9854f2416) [#3](https://github.com/RAprogramm/tsetlin-rs/issues/3) ✨ feat: add ClauseBank SoA storage for cache-efficient operations
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
 
