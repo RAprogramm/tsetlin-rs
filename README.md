@@ -45,6 +45,7 @@ A professional Rust implementation of the Tsetlin Machine algorithm for interpre
 - **Convolutional** - `Convolutional` for image-like data
 - **Advanced Training** - Weighted clauses, adaptive threshold, clause pruning
 - **BitwiseClause** - 64 features per CPU instruction (25-92x speedup)
+- **BitPlaneBank** - Bit-plane storage for parallel state updates (~2x Type II speedup)
 - **SIMD Optimization** - `simd` feature (nightly)
 - **Parallel Training** - `parallel` feature (rayon)
 - **Serialization** - `serde` feature
@@ -161,6 +162,19 @@ Structure of Arrays layout for cache-efficient bulk operations:
 > [!NOTE]
 > SoA benefits increase with larger clause counts and SIMD vectorization (future).
 
+### BitPlaneBank (parallel state updates)
+
+Transposed bit-level storage for 64 automata updates per operation:
+
+| Operation | ClauseBank | BitPlaneBank | Speedup |
+|-----------|------------|--------------|---------|
+| Type II (1024 features) | 1.48 µs | **759 ns** | **~2x** |
+| Type II (256 features) | 426 ns | **330 ns** | **~1.3x** |
+| Type I (1024 features) | 5.05 µs | 5.25 µs | ~1x |
+
+> [!TIP]
+> BitPlaneBank excels at Type II feedback (deterministic bitwise ops). Type I is RNG-bound.
+
 ### BitwiseClause (fastest)
 
 | Features | Scalar | Bitwise | Speedup |
@@ -231,6 +245,7 @@ cargo run --release --example benchmark_advanced
 | `Regressor` | Regression |
 | `Convolutional` | 2D image classification |
 | `ClauseBank` | SoA storage for cache-efficient bulk ops |
+| `BitPlaneBank` | Bit-plane storage for parallel state updates |
 | `BitwiseClause` | 64 features per AND operation |
 | `SmallClause<N>` | Const-generic stack-allocated clause |
 | `SmallTsetlinMachine<N, C>` | Compile-time optimized TM |
@@ -414,6 +429,69 @@ type BitwiseClause256 = SmallBitwiseClause<256, 4>;
 | `SmallClause<N>` | 15 ns | 60 ns | 240 ns | No |
 | `BitwiseClause` | 8 ns | 3 ns | 4.8 ns | Yes |
 | `SmallBitwiseClause<N,W>` | 6 ns | 2.5 ns | 4 ns | No |
+
+</details>
+
+<details>
+<summary><strong>BitPlaneBank - Parallel State Updates</strong></summary>
+
+### Bit-Plane Storage
+
+`BitPlaneBank` stores automata states in transposed bit-level format for parallel operations:
+
+**Traditional layout:**
+```
+[state0: 8bits, state1: 8bits, state2: 8bits, ...]
+```
+
+**Bit-plane layout:**
+```
+plane[0]: [s0_b0, s1_b0, s2_b0, ...]  // LSB of all states
+plane[1]: [s0_b1, s1_b1, s2_b1, ...]
+...
+plane[7]: [s0_b7, s1_b7, s2_b7, ...]  // MSB = action bit
+```
+
+### Key Operations
+
+| Operation | Traditional | Bit-Plane |
+|-----------|-------------|-----------|
+| Get action | Read state, compare | Read MSB bit |
+| Increment 64 states | 64 additions | 8 XOR + carry |
+| Evaluate clause | N comparisons | N/64 AND ops |
+
+### Ripple-Carry Arithmetic
+
+Increment/decrement 64 automata in parallel:
+
+```rust
+// Increment all positions where mask bit is set
+fn increment_masked(&mut self, clause: usize, chunk: usize, mask: u64) {
+    let mut carry = mask;
+    for plane in &mut self.planes {
+        let val = plane[chunk_idx];
+        plane[chunk_idx] = val ^ carry;
+        carry &= val;
+        if carry == 0 { break; }
+    }
+}
+```
+
+### When to Use
+
+| Scenario | Recommended |
+|----------|-------------|
+| Large feature counts (256+) | Yes |
+| Type II feedback heavy | Yes |
+| Need parallel updates | Yes |
+| Memory constrained | No (8× state storage) |
+| Type I feedback heavy | No (RNG dominates) |
+
+### References
+
+- [Fast CUDA TM](https://github.com/cair/fast-tsetlin-machine-in-cuda-with-imdb-demo) — Original bit-plane implementation
+- [Massively Parallel TM (ICML 2021)](https://proceedings.mlr.press/v139/abeyrathna21a.html) — K.D. Abeyrathna et al.
+- [FPGA TM Accelerators](https://www.researchgate.net/publication/391247256) — Edge training optimizations
 
 </details>
 
