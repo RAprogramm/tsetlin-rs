@@ -310,4 +310,116 @@ impl ClauseBank {
             }
         }
     }
+
+    /// Evaluates all clauses and populates the firing bitmap.
+    ///
+    /// Returns the sum of weighted votes while recording which clauses
+    /// fired in the internal bitmap. Use [`clause_fires`](Self::clause_fires)
+    /// to check individual clause status.
+    ///
+    /// This is more efficient than calling `evaluate_clause` in a loop
+    /// when you need both the vote sum and firing status for feedback.
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - Binary input vector
+    ///
+    /// # Returns
+    ///
+    /// Sum of weighted votes from all firing clauses.
+    #[inline]
+    pub fn evaluate_all(&mut self, x: &[u8]) -> f32 {
+        self.fires_bitmap.fill(0);
+        let mut sum = 0.0f32;
+
+        for i in 0..self.n_clauses {
+            if self.evaluate_clause(i, x) {
+                // Set bit in bitmap
+                let word = i / 64;
+                let bit = i % 64;
+                self.fires_bitmap[word] |= 1u64 << bit;
+
+                // Accumulate vote
+                sum += unsafe {
+                    *self.polarities.get_unchecked(i) as f32 * *self.weights.get_unchecked(i)
+                };
+
+                // Track activation
+                self.activations[i] = self.activations[i].saturating_add(1);
+            }
+        }
+        sum
+    }
+
+    /// Checks if a specific clause fired in the last evaluation.
+    ///
+    /// # Arguments
+    ///
+    /// * `clause` - Index of the clause to check
+    ///
+    /// # Returns
+    ///
+    /// `true` if the clause fired during the last
+    /// [`evaluate_all`](Self::evaluate_all) call.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `clause >= n_clauses`.
+    #[inline(always)]
+    #[must_use]
+    pub fn clause_fires(&self, clause: usize) -> bool {
+        let word = clause / 64;
+        let bit = clause % 64;
+        self.fires_bitmap[word] & (1u64 << bit) != 0
+    }
+
+    /// Returns an iterator over indices of clauses that fired.
+    ///
+    /// More efficient than checking each clause individually when
+    /// processing only firing clauses.
+    #[inline]
+    pub fn firing_clauses(&self) -> impl Iterator<Item = usize> + '_ {
+        self.fires_bitmap
+            .iter()
+            .enumerate()
+            .flat_map(|(word_idx, &word)| FiringBits {
+                word,
+                base: word_idx * 64,
+                max: self.n_clauses
+            })
+    }
+
+    /// Returns the number of clauses that fired in the last evaluation.
+    #[inline]
+    #[must_use]
+    pub fn firing_count(&self) -> usize {
+        self.fires_bitmap
+            .iter()
+            .map(|w| w.count_ones() as usize)
+            .sum()
+    }
+}
+
+/// Iterator over set bits in a u64 word.
+struct FiringBits {
+    word: u64,
+    base: usize,
+    max:  usize
+}
+
+impl Iterator for FiringBits {
+    type Item = usize;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.word != 0 {
+            let tz = self.word.trailing_zeros() as usize;
+            self.word &= self.word - 1; // Clear lowest set bit
+            let idx = self.base + tz;
+            if idx < self.max {
+                return Some(idx);
+            }
+        }
+        None
+    }
 }

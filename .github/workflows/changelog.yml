@@ -1,0 +1,119 @@
+name: Changelog
+
+on:
+  workflow_call:
+    inputs:
+      enabled:
+        type: boolean
+        required: true
+
+jobs:
+  changelog:
+    if: inputs.enabled
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const { execSync } = require('child_process');
+
+            const cargo = fs.readFileSync('Cargo.toml', 'utf8');
+            const versionMatch = cargo.match(/^version\s*=\s*"([^"]+)"/m);
+            const currentVersion = versionMatch ? `v${versionMatch[1]}` : 'v0.0.0';
+            console.log(`Current version: ${currentVersion}`);
+
+            let existingSHAs = new Set();
+            let existingVersions = new Set();
+            let unreleasedEntries = [];
+            let versionedSections = [];
+
+            if (fs.existsSync('CHANGELOG.md')) {
+              const existing = fs.readFileSync('CHANGELOG.md', 'utf8');
+              const shaRegex = /\[`([a-f0-9]{7})`\]/g;
+              let m;
+              while ((m = shaRegex.exec(existing)) !== null) {
+                existingSHAs.add(m[1]);
+              }
+              const unreleasedMatch = existing.match(/## Unreleased\n\n([\s\S]*?)(?=\n## v|$)/);
+              if (unreleasedMatch && unreleasedMatch[1].trim()) {
+                unreleasedEntries = unreleasedMatch[1].trim().split('\n\n').filter(e => e.startsWith('- ['));
+              }
+              const versionedMatch = existing.match(/\n(## v[\d.]+[\s\S]*)/);
+              if (versionedMatch) {
+                versionedSections = versionedMatch[1].split(/(?=\n## v[\d.]+)/).filter(s => s.trim());
+              }
+              const versionRegex = /^## (v[\d.]+)/gm;
+              while ((m = versionRegex.exec(existing)) !== null) {
+                existingVersions.add(m[1]);
+              }
+            }
+
+            console.log(`Existing versions: ${[...existingVersions].join(', ') || 'none'}`);
+            const gitLog = execSync('git log -100 --pretty=format:"%H|%h|%s|%an" --no-merges', { encoding: 'utf8' });
+            const newCommits = [];
+
+            for (const line of gitLog.split('\n').filter(l => l)) {
+              const [sha, shaShort, message, author] = line.split('|');
+              if (existingSHAs.has(shaShort)) continue;
+              if (message.includes('chore: update changelog')) continue;
+              if (message.includes('Merge pull request')) continue;
+
+              try {
+                const { data: commitData } = await github.rest.repos.getCommit({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: sha
+                });
+                const ghAuthor = commitData.author;
+                const authorAvatar = ghAuthor?.avatar_url
+                  ? `[<img src="${ghAuthor.avatar_url}" width="20" height="20" style="border-radius:50%" title="${ghAuthor.login}"/>](${ghAuthor.html_url})`
+                  : `**${author}**`;
+                const repoUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
+                let linkedMessage = message.replace(/#(\d+)/g, `[#$1](${repoUrl}/issues/$1)`);
+                const typeMatch = linkedMessage.match(/^(\[#\d+\]\([^)]+\)\s+)?(\w+)(\([^)]+\))?:\s*(.+)$/);
+                if (typeMatch) {
+                  const [, issue = '', type, scope = '', desc] = typeMatch;
+                  const types = {
+                    feat: '✨', fix: '🐛', docs: '📚', style: '💎',
+                    refactor: '♻️', perf: '⚡', test: '🧪', build: '📦',
+                    ci: '🔧', chore: '🔨', revert: '⏪'
+                  };
+                  const emoji = types[type] || '📝';
+                  linkedMessage = `${issue}${emoji} ${type}${scope}: ${desc}`;
+                }
+                newCommits.push(`- [\`${shaShort}\`](${commitData.html_url}) ${linkedMessage}\n  ${authorAvatar}`);
+              } catch (e) {
+                console.log(`Skip commit ${shaShort}: ${e.message}`);
+              }
+            }
+
+            console.log(`New commits found: ${newCommits.length}`);
+            let changelog = '# Changelog\n\n---\n\n';
+            const isNewVersion = !existingVersions.has(currentVersion);
+
+            if (isNewVersion && newCommits.length > 0) {
+              changelog += `## ${currentVersion}\n\n`;
+              changelog += newCommits.join('\n\n') + '\n\n';
+            }
+            if (unreleasedEntries.length > 0 && (existingVersions.has(currentVersion) || newCommits.length === 0)) {
+              changelog += '## Unreleased\n\n';
+              changelog += unreleasedEntries.join('\n\n') + '\n\n';
+            }
+            if (versionedSections.length > 0) {
+              changelog += versionedSections.join('\n');
+            }
+            fs.writeFileSync('CHANGELOG.md', changelog);
+
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git diff --staged --quiet || git commit -m "chore: update changelog"
+          git push
