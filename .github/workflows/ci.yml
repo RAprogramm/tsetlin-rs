@@ -228,7 +228,10 @@ jobs:
   changelog:
     name: Changelog
     runs-on: ubuntu-latest
-    if: "github.event_name == 'push' && !contains(github.event.head_commit.message, 'chore: update changelog')"
+    if: |
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') &&
+      !contains(github.event.head_commit.message, 'chore: update changelog')
     needs: [test, doc]
     permissions:
       contents: write
