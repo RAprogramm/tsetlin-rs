@@ -358,6 +358,66 @@ fn bench_bitplane_increment(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_train_sample_bitmap(c: &mut Criterion) {
+    let mut group = c.benchmark_group("train_sample_bitmap");
+
+    for n_clauses in [50, 100, 200] {
+        let n_features = 64;
+        let x: Vec<u8> = (0..n_features).map(|i| (i % 2) as u8).collect();
+
+        // ClauseBank with bitmap-based train_sample
+        group.bench_with_input(
+            BenchmarkId::new("train_sample", n_clauses),
+            &n_clauses,
+            |b, &n| {
+                b.iter(|| {
+                    let mut bank = ClauseBank::new(n, n_features, 100);
+                    let mut rng = rng_from_seed(42);
+                    bank.train_sample(black_box(&x), 1, 10.0, 3.9, &mut rng);
+                    black_box(&bank);
+                });
+            }
+        );
+    }
+
+    group.finish();
+}
+
+fn bench_evaluate_all_bitmap(c: &mut Criterion) {
+    let mut group = c.benchmark_group("evaluate_all_bitmap");
+
+    for n_clauses in [50, 100, 200] {
+        let n_features = 64;
+        let x: Vec<u8> = (0..n_features).map(|i| (i % 2) as u8).collect();
+
+        // evaluate_all with bitmap (new)
+        group.bench_with_input(
+            BenchmarkId::new("evaluate_all", n_clauses),
+            &n_clauses,
+            |b, &n| {
+                b.iter(|| {
+                    let mut bank = ClauseBank::new(n, n_features, 100);
+                    black_box(bank.evaluate_all(black_box(&x)));
+                });
+            }
+        );
+
+        // sum_votes_tracked (baseline)
+        group.bench_with_input(
+            BenchmarkId::new("sum_votes_tracked", n_clauses),
+            &n_clauses,
+            |b, &n| {
+                b.iter(|| {
+                    let mut bank = ClauseBank::new(n, n_features, 100);
+                    black_box(bank.sum_votes_tracked(black_box(&x)));
+                });
+            }
+        );
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_clause_evaluate,
@@ -371,6 +431,8 @@ criterion_group!(
     bench_aos_vs_soa,
     bench_bitplane_evaluate,
     bench_bitplane_feedback,
-    bench_bitplane_increment
+    bench_bitplane_increment,
+    bench_train_sample_bitmap,
+    bench_evaluate_all_bitmap
 );
 criterion_main!(benches);

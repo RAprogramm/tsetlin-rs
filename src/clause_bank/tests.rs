@@ -234,3 +234,148 @@ fn increment_respects_ceiling() {
 
     assert_eq!(bank.states[0], 200); // Should not exceed max
 }
+
+#[test]
+fn evaluate_all_populates_bitmap() {
+    let mut bank = ClauseBank::new(4, 2, 100);
+
+    // All clauses fire initially (no literals included)
+    let sum = bank.evaluate_all(&[0, 0]);
+
+    assert!(bank.clause_fires(0));
+    assert!(bank.clause_fires(1));
+    assert!(bank.clause_fires(2));
+    assert!(bank.clause_fires(3));
+    assert!((sum - 0.0).abs() < 0.001); // Alternating polarities cancel out
+}
+
+#[test]
+fn bitmap_tracks_non_firing() {
+    let mut bank = ClauseBank::new(4, 2, 100);
+
+    // Make clause 0 require x[0] = 1
+    for _ in 0..100 {
+        bank.increment(0, 0); // Include x_0
+    }
+
+    // Evaluate with x[0] = 0 - clause 0 should NOT fire
+    bank.evaluate_all(&[0, 0]);
+
+    assert!(
+        !bank.clause_fires(0),
+        "clause 0 should not fire with x[0]=0"
+    );
+    assert!(bank.clause_fires(1), "clause 1 should still fire");
+}
+
+#[test]
+fn firing_clauses_iterator() {
+    let mut bank = ClauseBank::new(4, 2, 100);
+
+    // Make clause 0 and 2 not fire
+    for _ in 0..100 {
+        bank.increment(0, 0);
+        bank.increment(2, 0);
+    }
+
+    bank.evaluate_all(&[0, 0]);
+
+    let firing: Vec<usize> = bank.firing_clauses().collect();
+    assert_eq!(firing, vec![1, 3]);
+}
+
+#[test]
+fn firing_count_correct() {
+    let mut bank = ClauseBank::new(10, 2, 100);
+
+    // Make clauses 0, 3, 5 not fire
+    for _ in 0..100 {
+        bank.increment(0, 0);
+        bank.increment(3, 0);
+        bank.increment(5, 0);
+    }
+
+    bank.evaluate_all(&[0, 0]);
+
+    assert_eq!(bank.firing_count(), 7);
+}
+
+#[test]
+fn bitmap_with_many_clauses() {
+    // Test with > 64 clauses to verify multi-word bitmap
+    let mut bank = ClauseBank::new(100, 2, 100);
+
+    // Make clauses 0, 64, 99 not fire
+    for _ in 0..100 {
+        bank.increment(0, 0);
+        bank.increment(64, 0);
+        bank.increment(99, 0);
+    }
+
+    bank.evaluate_all(&[0, 0]);
+
+    assert!(!bank.clause_fires(0));
+    assert!(bank.clause_fires(1));
+    assert!(bank.clause_fires(63));
+    assert!(!bank.clause_fires(64));
+    assert!(bank.clause_fires(65));
+    assert!(!bank.clause_fires(99));
+    assert_eq!(bank.firing_count(), 97);
+}
+
+#[test]
+fn train_sample_produces_valid_output() {
+    let mut bank = ClauseBank::new(20, 4, 100);
+    let mut rng = rng_from_seed(42);
+
+    let sum = bank.train_sample(&[1, 0, 1, 0], 1, 10.0, 3.9, &mut rng);
+
+    // Sum should be within [-threshold, threshold]
+    assert!((-10.0..=10.0).contains(&sum));
+}
+
+#[test]
+fn train_sample_modifies_states() {
+    let mut bank = ClauseBank::new(10, 2, 100);
+    let mut rng = rng_from_seed(42);
+
+    let initial_states: Vec<i16> = bank.states.clone();
+
+    // Train multiple times
+    for _ in 0..100 {
+        bank.train_sample(&[1, 0], 1, 10.0, 3.9, &mut rng);
+    }
+
+    // States should have changed
+    assert_ne!(bank.states, initial_states);
+}
+
+#[test]
+fn type_ii_firing_only_affects_matching_polarity() {
+    let mut bank = ClauseBank::new(4, 2, 100);
+    let mut rng = rng_from_seed(42);
+
+    // All clauses fire initially
+    bank.evaluate_all(&[1, 0]);
+
+    // type_ii increments states <= threshold toward include
+    // Initial state is 100 (= threshold), so it should increment
+
+    // Get initial states for clause 1 (negative polarity)
+    let clause1_base = bank.stride;
+    let initial_neg_x0 = bank.states[clause1_base + 1]; // ¬x_0 automaton
+
+    // Apply type_ii only to negative clauses (polarity = -1)
+    // With x = [1, 0], it should try to include ¬x_0 (since x[0]=1)
+    bank.type_ii_firing(&[1, 0], -1, u32::MAX, &mut rng);
+
+    // Positive clauses (0, 2) should be unchanged
+    assert_eq!(bank.states[0], 100, "positive clause should be unchanged");
+    assert_eq!(bank.states[1], 100, "positive clause should be unchanged");
+
+    // Negative clause 1: ¬x_0 should be incremented (x[0]=1, state <= threshold)
+    assert!(
+        bank.states[clause1_base + 1] > initial_neg_x0,
+        "¬x_0 in negative clause should be incremented"
+    );
+}
