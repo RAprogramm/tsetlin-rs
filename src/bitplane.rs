@@ -80,9 +80,6 @@ pub struct BitPlaneBank {
     /// Number of u64 chunks per clause (ceil(2 * n_features / 64)).
     chunks_per_clause: usize,
 
-    /// Total automata per clause (2 * n_features).
-    automata_per_clause: usize,
-
     /// Clause polarities (+1 or -1).
     polarities: Vec<i8>,
 
@@ -128,7 +125,6 @@ impl BitPlaneBank {
             n_clauses,
             n_features,
             chunks_per_clause,
-            automata_per_clause,
             polarities: (0..n_clauses)
                 .map(|i| if i % 2 == 0 { 1 } else { -1 })
                 .collect(),
@@ -429,6 +425,257 @@ impl BitPlaneBank {
         let bit_pos = automaton % CHUNK_SIZE;
         self.decrement_masked(clause, chunk, 1u64 << bit_pos);
     }
+
+    /// Applies Type I feedback to a clause.
+    ///
+    /// Type I reinforces patterns when y=1:
+    /// - When clause fires: strengthen matching literals, weaken non-matching
+    /// - When clause doesn't fire: weaken all toward exclusion
+    ///
+    /// # Arguments
+    ///
+    /// * `clause` - Clause index
+    /// * `x` - Binary input vector
+    /// * `fires` - Whether the clause fired on this input
+    /// * `s` - Specificity parameter (typically 3.0-10.0)
+    /// * `rng` - Random number generator
+    ///
+    /// # Algorithm
+    ///
+    /// Uses parallel bit-plane operations to update 64 automata simultaneously.
+    /// Probability decisions are made per-automaton, then batched into masks.
+    pub fn type_i<R: rand::Rng>(
+        &mut self,
+        clause: usize,
+        x: &[u8],
+        fires: bool,
+        s: f32,
+        rng: &mut R
+    ) {
+        let n = x.len().min(self.n_features);
+
+        if !fires {
+            // Weaken all automata with probability 1/s
+            self.weaken_all(clause, n, s, rng);
+            return;
+        }
+
+        // Firing clause: reinforce matching pattern
+        let prob_strengthen = (s - 1.0) / s;
+        let prob_weaken = 1.0 / s;
+
+        // Process full chunks (32 features = 64 automata per chunk)
+        let full_chunks = n / 32;
+
+        for chunk in 0..full_chunks {
+            let x_offset = chunk * 32;
+            let mut inc_mask = 0u64;
+            let mut dec_mask = 0u64;
+
+            for k in 0..32 {
+                let xk = x[x_offset + k];
+                let pos_include = 2 * k;
+                let pos_negated = 2 * k + 1;
+
+                if xk == 1 {
+                    // Strengthen include, weaken negated
+                    if rng.random::<f32>() <= prob_strengthen {
+                        inc_mask |= 1u64 << pos_include;
+                    }
+                    if rng.random::<f32>() <= prob_weaken {
+                        dec_mask |= 1u64 << pos_negated;
+                    }
+                } else {
+                    // Strengthen negated, weaken include
+                    if rng.random::<f32>() <= prob_strengthen {
+                        inc_mask |= 1u64 << pos_negated;
+                    }
+                    if rng.random::<f32>() <= prob_weaken {
+                        dec_mask |= 1u64 << pos_include;
+                    }
+                }
+            }
+
+            self.increment_masked(clause, chunk, inc_mask);
+            self.decrement_masked(clause, chunk, dec_mask);
+        }
+
+        // Handle remaining features
+        let start = full_chunks * 32;
+        for (k, &xk) in x.iter().enumerate().take(n).skip(start) {
+            let automaton_include = 2 * k;
+            let automaton_negated = 2 * k + 1;
+
+            if xk == 1 {
+                if rng.random::<f32>() <= prob_strengthen {
+                    self.increment(clause, automaton_include);
+                }
+                if rng.random::<f32>() <= prob_weaken {
+                    self.decrement(clause, automaton_negated);
+                }
+            } else {
+                if rng.random::<f32>() <= prob_strengthen {
+                    self.increment(clause, automaton_negated);
+                }
+                if rng.random::<f32>() <= prob_weaken {
+                    self.decrement(clause, automaton_include);
+                }
+            }
+        }
+    }
+
+    /// Weakens all automata in a clause with probability 1/s.
+    fn weaken_all<R: rand::Rng>(&mut self, clause: usize, n_features: usize, s: f32, rng: &mut R) {
+        let prob_weaken = 1.0 / s;
+        let n_automata = 2 * n_features;
+        let full_chunks = n_automata / CHUNK_SIZE;
+
+        for chunk in 0..full_chunks {
+            let mut dec_mask = 0u64;
+            for bit in 0..CHUNK_SIZE {
+                if rng.random::<f32>() <= prob_weaken {
+                    dec_mask |= 1u64 << bit;
+                }
+            }
+            self.decrement_masked(clause, chunk, dec_mask);
+        }
+
+        // Remaining automata
+        let start = full_chunks * CHUNK_SIZE;
+        for automaton in start..n_automata {
+            if rng.random::<f32>() <= prob_weaken {
+                self.decrement(clause, automaton);
+            }
+        }
+    }
+
+    /// Applies Type II feedback to a clause.
+    ///
+    /// Type II corrects false positives when y=0:
+    /// Activates blocking literals to prevent future misfires.
+    ///
+    /// For each feature k:
+    /// - If x\[k\]=0 and include action not active: increment include automaton
+    /// - If x\[k\]=1 and negated action not active: increment negated automaton
+    ///
+    /// # Arguments
+    ///
+    /// * `clause` - Clause index
+    /// * `x` - Binary input vector
+    pub fn type_ii(&mut self, clause: usize, x: &[u8]) {
+        let n = x.len().min(self.n_features);
+        let full_chunks = n / 32;
+        let msb_start = clause * self.chunks_per_clause;
+
+        // Process full chunks
+        for chunk in 0..full_chunks {
+            let x_offset = chunk * 32;
+            // Read MSB directly to avoid holding borrow across mutation
+            let actions = self.planes[STATE_BITS - 1][msb_start + chunk];
+            let x_interleaved = interleave_input(&x[x_offset..x_offset + 32]);
+
+            // Increment include (even positions) where x=0 and action not active
+            // x=0 means interleaved bit is 0, action not active means MSB bit is 0
+            let include_positions = EVEN_BITS_MASK & !x_interleaved & !actions;
+
+            // Increment negated (odd positions) where x=1 and action not active
+            let negated_positions = ODD_BITS_MASK & x_interleaved & !actions;
+
+            let inc_mask = include_positions | negated_positions;
+            self.increment_masked(clause, chunk, inc_mask);
+        }
+
+        // Handle remaining features
+        let start = full_chunks * 32;
+        for (k, &xk) in x.iter().enumerate().take(n).skip(start) {
+            let automaton_include = 2 * k;
+            let automaton_negated = 2 * k + 1;
+
+            if xk == 0 {
+                if !self.action(clause, automaton_include) {
+                    self.increment(clause, automaton_include);
+                }
+            } else if !self.action(clause, automaton_negated) {
+                self.increment(clause, automaton_negated);
+            }
+        }
+    }
+
+    /// Applies boosted Type I feedback (Type Ia).
+    ///
+    /// When firing, always strengthens matching literals (probability 1.0).
+    /// Weakening still uses probability 1/s.
+    ///
+    /// # Arguments
+    ///
+    /// * `clause` - Clause index
+    /// * `x` - Binary input vector
+    /// * `fires` - Whether the clause fired on this input
+    /// * `s` - Specificity parameter
+    /// * `rng` - Random number generator
+    pub fn type_ia<R: rand::Rng>(
+        &mut self,
+        clause: usize,
+        x: &[u8],
+        fires: bool,
+        s: f32,
+        rng: &mut R
+    ) {
+        let n = x.len().min(self.n_features);
+
+        if !fires {
+            self.weaken_all(clause, n, s, rng);
+            return;
+        }
+
+        let prob_weaken = 1.0 / s;
+        let full_chunks = n / 32;
+
+        for chunk in 0..full_chunks {
+            let x_offset = chunk * 32;
+            let x_interleaved = interleave_input(&x[x_offset..x_offset + 32]);
+
+            // Always increment matching: include where x=1, negated where x=0
+            let inc_include = EVEN_BITS_MASK & x_interleaved;
+            let inc_negated = ODD_BITS_MASK & !x_interleaved;
+            let inc_mask = inc_include | inc_negated;
+
+            // Weaken opposite with probability 1/s
+            let mut dec_mask = 0u64;
+            for k in 0..32 {
+                let xk = x[x_offset + k];
+                if xk == 1 {
+                    if rng.random::<f32>() <= prob_weaken {
+                        dec_mask |= 1u64 << (2 * k + 1); // negated
+                    }
+                } else if rng.random::<f32>() <= prob_weaken {
+                    dec_mask |= 1u64 << (2 * k); // include
+                }
+            }
+
+            self.increment_masked(clause, chunk, inc_mask);
+            self.decrement_masked(clause, chunk, dec_mask);
+        }
+
+        // Handle remaining features
+        let start = full_chunks * 32;
+        for (k, &xk) in x.iter().enumerate().take(n).skip(start) {
+            let automaton_include = 2 * k;
+            let automaton_negated = 2 * k + 1;
+
+            if xk == 1 {
+                self.increment(clause, automaton_include);
+                if rng.random::<f32>() <= prob_weaken {
+                    self.decrement(clause, automaton_negated);
+                }
+            } else {
+                self.increment(clause, automaton_negated);
+                if rng.random::<f32>() <= prob_weaken {
+                    self.decrement(clause, automaton_include);
+                }
+            }
+        }
+    }
 }
 
 /// Mask for even bits (0, 2, 4, ..., 62).
@@ -704,5 +951,113 @@ mod tests {
 
         // Now action should be include (MSB = 1)
         assert!(bank.action(0, 0));
+    }
+
+    #[test]
+    fn type_i_not_firing_weakens() {
+        use crate::utils::rng_from_seed;
+
+        let mut bank = BitPlaneBank::new(1, 8, 100);
+        let mut rng = rng_from_seed(42);
+        let x = vec![1, 0, 1, 0, 1, 0, 1, 0];
+
+        // Apply Type I feedback 100 times without firing
+        for _ in 0..100 {
+            bank.type_i(0, &x, false, 3.0, &mut rng);
+        }
+
+        // All states should have decreased
+        let any_decreased = (0..16).any(|a| bank.get_state(0, a) < 100);
+        assert!(any_decreased);
+    }
+
+    #[test]
+    fn type_i_firing_strengthens() {
+        use crate::utils::rng_from_seed;
+
+        let mut bank = BitPlaneBank::new(1, 8, 50);
+        let mut rng = rng_from_seed(42);
+        let x = vec![1, 0, 1, 0, 1, 0, 1, 0];
+
+        // Apply Type I feedback 200 times while firing
+        for _ in 0..200 {
+            bank.type_i(0, &x, true, 3.0, &mut rng);
+        }
+
+        // Include for x[k]=1 features should become active
+        assert!(bank.action(0, 0)); // include for x[0]=1
+        assert!(bank.action(0, 4)); // include for x[2]=1
+
+        // Negated for x[k]=0 features should become active
+        assert!(bank.action(0, 3)); // negated for x[1]=0
+        assert!(bank.action(0, 7)); // negated for x[3]=0
+    }
+
+    #[test]
+    fn type_ii_activates_blockers() {
+        let mut bank = BitPlaneBank::new(1, 8, 50);
+        let x = vec![1, 0, 1, 0, 1, 0, 1, 0];
+
+        // Apply Type II feedback 100 times
+        for _ in 0..100 {
+            bank.type_ii(0, &x);
+        }
+
+        // Negated for x[k]=1 should become active (blocking)
+        assert!(bank.action(0, 1)); // negated for x[0]=1
+        assert!(bank.action(0, 5)); // negated for x[2]=1
+
+        // Include for x[k]=0 should become active (blocking)
+        assert!(bank.action(0, 2)); // include for x[1]=0
+        assert!(bank.action(0, 6)); // include for x[3]=0
+    }
+
+    #[test]
+    fn type_ia_always_strengthens() {
+        use crate::utils::rng_from_seed;
+
+        let mut bank = BitPlaneBank::new(1, 8, 100);
+        let mut rng = rng_from_seed(42);
+        let x = vec![1, 1, 1, 1, 1, 1, 1, 1];
+
+        // Single application of boosted Type I
+        bank.type_ia(0, &x, true, 3.0, &mut rng);
+
+        // All include automata should have incremented (all x=1)
+        for k in 0..8 {
+            assert_eq!(bank.get_state(0, 2 * k), 101);
+        }
+    }
+
+    #[test]
+    fn feedback_large_features() {
+        use crate::utils::rng_from_seed;
+
+        // Test with 64 features (2 chunks)
+        // x[k] = k % 2: x[0]=0, x[1]=1, x[32]=0, x[33]=1
+        let mut bank = BitPlaneBank::new(1, 64, 50);
+        let mut rng = rng_from_seed(42);
+        let x: Vec<u8> = (0..64).map(|i| (i % 2) as u8).collect();
+
+        // Type I firing: strengthen matching
+        // For x[32]=0: strengthen negated (automaton 2*32+1=65)
+        // For x[33]=1: strengthen include (automaton 2*33=66)
+        for _ in 0..200 {
+            bank.type_i(0, &x, true, 3.0, &mut rng);
+        }
+
+        assert!(bank.action(0, 65)); // negated for x[32]=0
+        assert!(bank.action(0, 66)); // include for x[33]=1
+
+        // Type II: activate blockers
+        // For x[32]=0 and include not active: increment include (64)
+        // For x[33]=1 and negated not active: increment negated (67)
+        let mut bank2 = BitPlaneBank::new(1, 64, 50);
+        for _ in 0..100 {
+            bank2.type_ii(0, &x);
+        }
+
+        assert!(bank2.action(0, 64)); // include for x[32]=0
+        assert!(bank2.action(0, 67)); // negated for x[33]=1
     }
 }

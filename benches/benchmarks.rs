@@ -4,8 +4,8 @@ use core::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use tsetlin_rs::{
-    BitwiseClause, Clause, Clause16, ClauseBank, Config, MultiClass, SmallClause, TsetlinMachine,
-    feedback, pack_input, utils::rng_from_seed
+    BitPlaneBank, BitwiseClause, Clause, Clause16, ClauseBank, Config, MultiClass, SmallClause,
+    TsetlinMachine, feedback, pack_input, utils::rng_from_seed
 };
 
 fn bench_clause_evaluate(c: &mut Criterion) {
@@ -229,6 +229,135 @@ fn bench_aos_vs_soa(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_bitplane_evaluate(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bitplane_vs_clausebank_eval");
+
+    for n_features in [64, 256, 1024] {
+        let n_clauses = 100;
+        let x: Vec<u8> = (0..n_features).map(|i| (i % 2) as u8).collect();
+
+        // ClauseBank (SoA)
+        let clausebank = ClauseBank::new(n_clauses, n_features, 100);
+
+        group.bench_with_input(
+            BenchmarkId::new("clausebank", n_features),
+            &n_features,
+            |b, _| {
+                b.iter(|| black_box(clausebank.sum_votes(black_box(&x))));
+            }
+        );
+
+        // BitPlaneBank
+        let bitplane = BitPlaneBank::new(n_clauses, n_features, 100);
+
+        group.bench_with_input(
+            BenchmarkId::new("bitplane", n_features),
+            &n_features,
+            |b, _| {
+                b.iter(|| black_box(bitplane.sum_votes(black_box(&x))));
+            }
+        );
+    }
+
+    group.finish();
+}
+
+fn bench_bitplane_feedback(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bitplane_vs_clausebank_feedback");
+
+    for n_features in [64, 256, 1024] {
+        let x: Vec<u8> = (0..n_features).map(|i| (i % 2) as u8).collect();
+
+        // ClauseBank Type I
+        group.bench_with_input(
+            BenchmarkId::new("clausebank_type_i", n_features),
+            &n_features,
+            |b, &n| {
+                b.iter(|| {
+                    let mut bank = ClauseBank::new(1, n, 100);
+                    let mut rng = rng_from_seed(42);
+                    bank.type_i(0, black_box(&x), true, 3.9, &mut rng);
+                });
+            }
+        );
+
+        // BitPlaneBank Type I
+        group.bench_with_input(
+            BenchmarkId::new("bitplane_type_i", n_features),
+            &n_features,
+            |b, &n| {
+                b.iter(|| {
+                    let mut bank = BitPlaneBank::new(1, n, 100);
+                    let mut rng = rng_from_seed(42);
+                    bank.type_i(0, black_box(&x), true, 3.9, &mut rng);
+                });
+            }
+        );
+
+        // ClauseBank Type II
+        group.bench_with_input(
+            BenchmarkId::new("clausebank_type_ii", n_features),
+            &n_features,
+            |b, &n| {
+                b.iter(|| {
+                    let mut bank = ClauseBank::new(1, n, 50);
+                    bank.type_ii(0, black_box(&x));
+                });
+            }
+        );
+
+        // BitPlaneBank Type II
+        group.bench_with_input(
+            BenchmarkId::new("bitplane_type_ii", n_features),
+            &n_features,
+            |b, &n| {
+                b.iter(|| {
+                    let mut bank = BitPlaneBank::new(1, n, 50);
+                    bank.type_ii(0, black_box(&x));
+                });
+            }
+        );
+    }
+
+    group.finish();
+}
+
+fn bench_bitplane_increment(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bitplane_parallel_increment");
+
+    for n_features in [64, 256, 1024] {
+        // Single increment (baseline)
+        group.bench_with_input(
+            BenchmarkId::new("single_64_increments", n_features),
+            &n_features,
+            |b, &n| {
+                b.iter(|| {
+                    let mut bank = BitPlaneBank::new(1, n, 100);
+                    for i in 0..64 {
+                        bank.increment(0, i);
+                    }
+                    black_box(&bank);
+                });
+            }
+        );
+
+        // Masked increment (parallel)
+        group.bench_with_input(
+            BenchmarkId::new("masked_64_increments", n_features),
+            &n_features,
+            |b, &n| {
+                b.iter(|| {
+                    let mut bank = BitPlaneBank::new(1, n, 100);
+                    bank.increment_masked(0, 0, u64::MAX);
+                    black_box(&bank);
+                });
+            }
+        );
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_clause_evaluate,
@@ -239,6 +368,9 @@ criterion_group!(
     bench_rule_extraction,
     bench_small_clause,
     bench_bitwise,
-    bench_aos_vs_soa
+    bench_aos_vs_soa,
+    bench_bitplane_evaluate,
+    bench_bitplane_feedback,
+    bench_bitplane_increment
 );
 criterion_main!(benches);
