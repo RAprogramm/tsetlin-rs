@@ -19,7 +19,7 @@ categories = ["science", "algorithms"]
 default = ["std"]
 std = []
 simd = ["std"]
-parallel = ["std", "rayon"]
+parallel = ["std", "rayon", "crossbeam-utils"]
 serde = ["dep:serde"]
 full = ["simd", "parallel", "serde"]
 
@@ -37,6 +37,10 @@ features = ["derive"]
 
 [dependencies.rayon]
 version = "1"
+optional = true
+
+[dependencies.crossbeam-utils]
+version = "0.8"
 optional = true
 
 [dev-dependencies]
