@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: 2025 RA <contact@rprogram.ru>
+# SPDX-License-Identifier: MIT
+
+name: On Merge
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  changelog:
+    if: github.event.pull_request.merged == true
+    permissions:
+      contents: write
+    uses: ./.github/workflows/changelog.yml
+    with:
+      enabled: true
+
+  publish:
+    if: github.event.pull_request.merged == true
+    needs: changelog
+    uses: ./.github/workflows/publish.yml
+    with:
+      enabled: true
+    secrets:
+      CRATESIO: ${{ secrets.CRATESIO }}
+
+  release:
+    if: github.event.pull_request.merged == true
+    needs: [publish, changelog]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      enabled: true
