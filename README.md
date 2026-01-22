@@ -147,22 +147,35 @@ tm.fit(&x_train, &y_train, 100, 42);
 
 ## Benchmarks
 
+### ClauseBank (SoA storage)
+
+Structure of Arrays layout for cache-efficient bulk operations:
+
+| Clauses | AoS (µs) | SoA (µs) | Speedup |
+|---------|----------|----------|---------|
+| 50      | 3.64     | **3.50** | **1.04x** |
+| 100     | 8.55     | **8.39** | **1.02x** |
+| 200     | 18.50    | **16.02**| **1.15x** |
+
+> [!NOTE]
+> SoA benefits increase with larger clause counts and SIMD vectorization (future).
+
 ### BitwiseClause (fastest)
 
 | Features | Scalar | Bitwise | Speedup |
 |----------|--------|---------|---------|
-| 64 | 75 ns | **3 ns** | **25x** |
-| 256 | 300 ns | **4.8 ns** | **62x** |
-| 1024 | 1.23 µs | **13 ns** | **92x** |
+| 64 | 82 ns | **1.9 ns** | **43x** |
+| 256 | 342 ns | **4 ns** | **85x** |
+| 1024 | 1.32 µs | **11 ns** | **116x** |
 
 ### Standard Clause
 
 | Operation | Time |
 |-----------|------|
-| Clause evaluate (16 features) | 23 ns |
-| Clause evaluate (64 features) | 100 ns |
-| Predict (10 clauses) | 1.1 µs |
-| Train epoch (100 samples) | 1.1 ms |
+| Clause evaluate (16 features) | 18 ns |
+| Clause evaluate (64 features) | 70 ns |
+| Predict (10 clauses) | 720 ns |
+| Train epoch (100 samples) | 1.15 ms |
 
 ### Optimizations
 
@@ -216,6 +229,7 @@ cargo run --release --example benchmark_advanced
 | `MultiClass` | Multi-class classification |
 | `Regressor` | Regression |
 | `Convolutional` | 2D image classification |
+| `ClauseBank` | SoA storage for cache-efficient bulk ops |
 | `BitwiseClause` | 64 features per AND operation |
 | `SmallClause<N>` | Const-generic stack-allocated clause |
 | `SmallTsetlinMachine<N, C>` | Compile-time optimized TM |

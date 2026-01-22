@@ -4,8 +4,8 @@ use core::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use tsetlin_rs::{
-    BitwiseClause, Clause, Clause16, Config, MultiClass, SmallClause, TsetlinMachine, feedback,
-    pack_input, utils::rng_from_seed
+    BitwiseClause, Clause, Clause16, ClauseBank, Config, MultiClass, SmallClause, TsetlinMachine,
+    feedback, pack_input, utils::rng_from_seed
 };
 
 fn bench_clause_evaluate(c: &mut Criterion) {
@@ -191,6 +191,44 @@ fn bench_bitwise(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_aos_vs_soa(c: &mut Criterion) {
+    let mut group = c.benchmark_group("aos_vs_soa");
+
+    for n_clauses in [50, 100, 200] {
+        let n_features = 64;
+        let x: Vec<u8> = (0..n_features).map(|i| (i % 2) as u8).collect();
+
+        // AoS: Vec<Clause>
+        let aos: Vec<Clause> = (0..n_clauses)
+            .map(|i| Clause::new(n_features, 100, if i % 2 == 0 { 1 } else { -1 }))
+            .collect();
+
+        group.bench_with_input(
+            BenchmarkId::new("aos_sum_votes", n_clauses),
+            &n_clauses,
+            |b, _| {
+                b.iter(|| {
+                    let sum: f32 = aos.iter().map(|c| c.vote(black_box(&x))).sum();
+                    black_box(sum)
+                });
+            }
+        );
+
+        // SoA: ClauseBank
+        let soa = ClauseBank::new(n_clauses, n_features, 100);
+
+        group.bench_with_input(
+            BenchmarkId::new("soa_sum_votes", n_clauses),
+            &n_clauses,
+            |b, _| {
+                b.iter(|| black_box(soa.sum_votes(black_box(&x))));
+            }
+        );
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_clause_evaluate,
@@ -200,6 +238,7 @@ criterion_group!(
     bench_feedback,
     bench_rule_extraction,
     bench_small_clause,
-    bench_bitwise
+    bench_bitwise,
+    bench_aos_vs_soa
 );
 criterion_main!(benches);
