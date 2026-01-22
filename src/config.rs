@@ -64,6 +64,37 @@ impl Config {
     pub fn prob_weaken(&self) -> f32 {
         1.0 / self.s
     }
+
+    /// # Overview
+    ///
+    /// Pre-computed integer threshold for strengthening.
+    ///
+    /// Converts float probability to u32 for faster comparison:
+    /// `rng.random::<u32>() < threshold` is ~2x faster than float comparison.
+    #[inline]
+    #[must_use]
+    pub fn threshold_strengthen(&self) -> u32 {
+        prob_to_threshold(self.prob_strengthen())
+    }
+
+    /// # Overview
+    ///
+    /// Pre-computed integer threshold for weakening.
+    #[inline]
+    #[must_use]
+    pub fn threshold_weaken(&self) -> u32 {
+        prob_to_threshold(self.prob_weaken())
+    }
+}
+
+/// Converts probability [0.0, 1.0] to integer threshold for fast comparison.
+///
+/// Usage: `rng.random::<u32>() < threshold` is equivalent to
+/// `rng.random::<f32>() < probability` but ~2x faster.
+#[inline]
+#[must_use]
+pub fn prob_to_threshold(prob: f32) -> u32 {
+    (prob as f64 * u32::MAX as f64) as u32
 }
 
 /// # Overview
@@ -157,5 +188,30 @@ mod tests {
 
         assert!((config.prob_strengthen() - 0.75).abs() < 0.001);
         assert!((config.prob_weaken() - 0.25).abs() < 0.001);
+    }
+
+    #[test]
+    fn integer_thresholds() {
+        let config = Config::builder()
+            .clauses(20)
+            .features(4)
+            .specificity(4.0)
+            .build()
+            .unwrap();
+
+        // 0.75 * u32::MAX ≈ 3221225471
+        assert!(config.threshold_strengthen() > 3_000_000_000);
+        assert!(config.threshold_strengthen() < 3_500_000_000);
+
+        // 0.25 * u32::MAX ≈ 1073741823
+        assert!(config.threshold_weaken() > 1_000_000_000);
+        assert!(config.threshold_weaken() < 1_200_000_000);
+    }
+
+    #[test]
+    fn prob_to_threshold_boundaries() {
+        assert_eq!(prob_to_threshold(0.0), 0);
+        assert_eq!(prob_to_threshold(1.0), u32::MAX);
+        assert_eq!(prob_to_threshold(0.5), u32::MAX / 2);
     }
 }

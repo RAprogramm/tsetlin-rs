@@ -369,3 +369,112 @@ fn parity_pattern_challenging() {
     let acc = tm.evaluate(&x_train, &y_train);
     assert!(acc >= 0.4, "Parity is hard but should be above random");
 }
+
+// ==================== Error Display Tests ====================
+
+#[test]
+fn error_display_messages() {
+    use tsetlin_rs::Error;
+
+    assert_eq!(Error::MissingClauses.to_string(), "n_clauses is required");
+    assert_eq!(Error::MissingFeatures.to_string(), "n_features is required");
+    assert_eq!(Error::OddClauses.to_string(), "n_clauses must be even");
+    assert_eq!(Error::InvalidSpecificity.to_string(), "s must be > 1.0");
+    assert_eq!(Error::InvalidThreshold.to_string(), "threshold must be > 0");
+    assert_eq!(Error::EmptyDataset.to_string(), "dataset cannot be empty");
+    assert_eq!(
+        Error::DimensionMismatch {
+            expected: 10,
+            got:      5
+        }
+        .to_string(),
+        "dimension mismatch: expected 10, got 5"
+    );
+}
+
+// ==================== Batch Prediction Tests ====================
+
+#[test]
+fn predict_batch_returns_correct_length() {
+    let config = Config::builder().clauses(20).features(2).build().unwrap();
+    let mut tm = TsetlinMachine::new(config, 10);
+
+    let (x, y) = xor_data();
+    tm.fit(&x, &y, 200, 42);
+
+    let predictions = tm.predict_batch(&x);
+    assert_eq!(predictions.len(), x.len());
+}
+
+// ==================== Parallel Training Tests ====================
+
+#[cfg(feature = "parallel")]
+#[test]
+fn parallel_training_xor() {
+    use tsetlin_rs::{ClauseBank, ParallelBatch};
+
+    let mut bank = ClauseBank::new(20, 2, 100);
+
+    let (x, y) = xor_data();
+    let batch = ParallelBatch::new(&x, &y);
+
+    // Train for multiple epochs
+    for epoch in 0..200 {
+        bank.train_parallel(&batch, 10.0, 3.9, 42 + epoch as u64);
+    }
+
+    // Check convergence
+    let correct: usize = x
+        .iter()
+        .zip(y.iter())
+        .filter(|(xi, yi)| {
+            let sum = bank.sum_votes(xi);
+            let pred = if sum >= 0.0 { 1 } else { 0 };
+            pred == **yi
+        })
+        .count();
+
+    let accuracy = correct as f32 / x.len() as f32;
+    assert!(
+        accuracy >= 0.75,
+        "Parallel training should achieve good accuracy: {}",
+        accuracy
+    );
+}
+
+#[cfg(feature = "parallel")]
+#[test]
+fn parallel_training_concurrent_tallies() {
+    use std::{sync::Arc, thread};
+
+    use tsetlin_rs::LocalTally;
+
+    let tally = Arc::new(LocalTally::new());
+
+    // Spawn multiple threads updating the same tally
+    let handles: Vec<_> = (0..8)
+        .map(|i| {
+            let tally = Arc::clone(&tally);
+            thread::spawn(move || {
+                for _ in 0..1000 {
+                    if i % 2 == 0 {
+                        tally.add_weighted(1, 1.0);
+                    } else {
+                        tally.add_weighted(-1, 1.0);
+                    }
+                }
+            })
+        })
+        .collect();
+
+    for h in handles {
+        h.join().unwrap();
+    }
+
+    // 4 threads added +1000 each, 4 threads added -1000 each = net 0
+    assert!(
+        tally.sum().abs() < 0.001,
+        "Concurrent updates should balance out: {}",
+        tally.sum()
+    );
+}

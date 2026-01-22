@@ -14,40 +14,88 @@
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/rust-1.92+-93450a?style=for-the-badge&logo=rust&logoColor=white" alt="Rust"/></a>
 </p>
 
-A professional Rust implementation of the Tsetlin Machine algorithm for interpretable machine learning.
+<p align="center">
+  <strong>A production-grade Rust implementation of the Tsetlin Machine algorithm for interpretable machine learning.</strong>
+</p>
+
+<p align="center">
+  <em>Lock-free parallel training | 116x bitwise speedup | Zero-allocation inference | Full interpretability</em>
+</p>
+
+---
+
+## Highlights
+
+```
+Performance:  4.4x parallel speedup  |  116x bitwise evaluation  |  O(1) inference
+Memory:       Zero-allocation SmallClause  |  Cache-aligned structures  |  no_std support
+Correctness:  99%+ test coverage  |  Property-based testing  |  Deterministic seeds
+```
 
 ---
 
 ## Table of Contents
 
-- [Features](#features)
+- [Overview](#overview)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Models](#models)
+- [Parallel Training](#parallel-training)
+- [Clause Implementations](#clause-implementations)
 - [Advanced Features](#advanced-features)
 - [Benchmarks](#benchmarks)
-- [Examples](#examples)
-- [Feature Flags](#feature-flags)
-- [API Overview](#api-overview)
-- [Algorithm Details](#algorithm-details)
+- [Algorithm Reference](#algorithm-reference)
+- [API Reference](#api-reference)
 - [Coverage](#coverage)
 - [In Memory of Michael Tsetlin](#in-memory-of-michael-tsetlin)
-- [Based On](#based-on)
+- [References](#references)
 - [License](#license)
 
 ---
 
-## Features
+## Overview
 
-- **Binary Classification** - `TsetlinMachine`
-- **Multi-class Classification** - `MultiClass`
-- **Regression** - `Regressor`
-- **Convolutional** - `Convolutional` for image-like data
-- **Advanced Training** - Weighted clauses, adaptive threshold, clause pruning
-- **BitwiseClause** - 64 features per CPU instruction (25-92x speedup)
-- **SIMD Optimization** - `simd` feature (nightly)
-- **Parallel Training** - `parallel` feature (rayon)
-- **Serialization** - `serde` feature
-- **no_std Support** - Works without standard library
+The Tsetlin Machine is a machine learning algorithm based on propositional logic and game theory. Unlike neural networks, it learns human-readable rules (conjunctions of literals) that can be directly interpreted and verified.
+
+**Key Properties:**
+
+| Property | Tsetlin Machine | Neural Network |
+|----------|-----------------|----------------|
+| Interpretability | Rules in propositional logic | Black box |
+| Training | Reinforcement learning | Gradient descent |
+| Inference | Boolean operations | Matrix multiplication |
+| Hardware | FPGA/ASIC friendly | GPU optimized |
+| Memory | O(clauses × features) | O(layers × neurons²) |
+
+<details>
+<summary><strong>Terminology & Abbreviations</strong></summary>
+
+<br/>
+
+| Term | Definition | Category |
+|:-----|:-----------|:--------:|
+| **AoS** | Array of Structures — traditional object layout | `opt` |
+| **Bit-plane** | Transposed bit representation for parallel operations | `opt` |
+| **Clause** | Conjunction (AND) of literals; votes for/against a class | `core` |
+| **CoTM** | Coalesced Tsetlin Machine | `abbr` |
+| **CTM** | Convolutional Tsetlin Machine | `abbr` |
+| **False sharing** | Cache line contention between CPU cores | `opt` |
+| **FPGA** | Field-Programmable Gate Array | `abbr` |
+| **Literal** | Boolean variable (`xₖ`) or its negation (`¬xₖ`) | `core` |
+| **MSB** | Most Significant Bit — encodes automaton action | `opt` |
+| **Polarity** | Clause vote direction: +1 or −1 | `core` |
+| **Ripple-carry** | Bit-level addition/subtraction algorithm | `opt` |
+| **RNG** | Random Number Generator | `abbr` |
+| **SIMD** | Single Instruction Multiple Data | `abbr` |
+| **SoA** | Structure of Arrays — cache-friendly layout | `opt` |
+| **Specificity (s)** | Controls pattern generality; higher = fewer literals | `train` |
+| **TA** | Tsetlin Automaton | `abbr` |
+| **Threshold (T)** | Controls feedback probability | `train` |
+| **TM** | Tsetlin Machine | `abbr` |
+
+<sub>`core` — fundamentals · `train` — training · `opt` — optimization · `abbr` — abbreviation</sub>
+
+</details>
 
 <div align="right"><a href="#top">Back to top</a></div>
 
@@ -57,18 +105,24 @@ A professional Rust implementation of the Tsetlin Machine algorithm for interpre
 
 ```toml
 [dependencies]
-tsetlin-rs = "0.1"
+tsetlin-rs = "0.2"
 ```
 
-With all features:
+With parallel training and serialization:
 
 ```toml
 [dependencies]
-tsetlin-rs = { version = "0.1", features = ["parallel", "serde"] }
+tsetlin-rs = { version = "0.2", features = ["parallel", "serde"] }
 ```
 
-> [!TIP]
-> Use `parallel` feature for multi-threaded training on large datasets.
+### Feature Flags
+
+| Feature | Default | Description |
+|---------|:-------:|-------------|
+| `std` | Yes | Standard library (disable for embedded) |
+| `parallel` | No | Lock-free parallel training via rayon |
+| `serde` | No | Serialization/deserialization |
+| `simd` | No | SIMD optimization (requires nightly) |
 
 <div align="right"><a href="#top">Back to top</a></div>
 
@@ -79,393 +133,273 @@ tsetlin-rs = { version = "0.1", features = ["parallel", "serde"] }
 ```rust
 use tsetlin_rs::{Config, TsetlinMachine};
 
+// Configure: 20 clauses, 2 features
 let config = Config::builder()
     .clauses(20)
     .features(2)
     .build()
     .unwrap();
 
+// Create machine with threshold T=15
 let mut tm = TsetlinMachine::new(config, 15);
 
+// XOR dataset
 let x = vec![vec![0, 0], vec![0, 1], vec![1, 0], vec![1, 1]];
 let y = vec![0, 1, 1, 0];
 
+// Train for 200 epochs with seed=42
 tm.fit(&x, &y, 200, 42);
 
+// Evaluate
 let accuracy = tm.evaluate(&x, &y);
 println!("Accuracy: {:.1}%", accuracy * 100.0);
+
+// Extract learned rules
+for rule in tm.rules() {
+    println!("{}", rule);
+}
 ```
 
-> [!NOTE]
-> The last parameter in `fit()` is a random seed for reproducibility.
+**Output:**
+```
+Accuracy: 100.0%
++: x₀ ∧ ¬x₁
++: ¬x₀ ∧ x₁
+-: x₀ ∧ x₁
+-: ¬x₀ ∧ ¬x₁
+```
 
 <div align="right"><a href="#top">Back to top</a></div>
 
 ---
 
-## Advanced Features
+## Models
 
-Enable weighted clauses, adaptive threshold, and clause pruning:
+### Binary Classification — `TsetlinMachine`
+
+Standard two-class classification with weighted clause voting.
 
 ```rust
-use tsetlin_rs::{Config, TsetlinMachine, AdvancedOptions};
+use tsetlin_rs::{Config, TsetlinMachine};
 
-let config = Config::builder().clauses(40).features(8).build().unwrap();
+let config = Config::builder().clauses(100).features(64).build().unwrap();
+let mut tm = TsetlinMachine::new(config, 15);
 
-let opts = AdvancedOptions {
-    adaptive_t: true,       // Dynamic threshold
-    t_min: 5.0,
-    t_max: 30.0,
-    t_lr: 0.02,             // Threshold learning rate
-    weight_lr: 0.08,        // Clause weight learning rate
-    weight_min: 0.3,
-    weight_max: 1.5,
-    prune_threshold: 3,     // Min activations to keep clause
-    prune_weight: 0.25,     // Min weight to keep clause
-};
-
-let mut tm = TsetlinMachine::with_advanced(config, 15, opts);
 tm.fit(&x_train, &y_train, 100, 42);
+let prediction = tm.predict(&x_test[0]);  // 0 or 1
 ```
 
-### When to Use Advanced Features
+### Multi-class Classification — `MultiClass`
 
-| Scenario | Standard | Advanced | Recommendation |
-|----------|----------|----------|----------------|
-| Clean data (0% noise) | 97.5% | **100%** | Advanced |
-| High noise (30%+) | 55.9% | **58.8%** | Advanced |
-| Large scale (32+ features) | 76.4% | **77.7%** | Advanced |
-| Complex patterns (parity) | 49.1% | **50.5%** | Advanced |
-| Simple patterns, low noise | **82.8%** | 81.1% | Standard |
-
-> [!IMPORTANT]
-> Run benchmark to compare: `cargo run --release --example benchmark_advanced`
-
-<div align="right"><a href="#top">Back to top</a></div>
-
----
-
-## Benchmarks
-
-### BitwiseClause (fastest)
-
-| Features | Scalar | Bitwise | Speedup |
-|----------|--------|---------|---------|
-| 64 | 75 ns | **3 ns** | **25x** |
-| 256 | 300 ns | **4.8 ns** | **62x** |
-| 1024 | 1.23 µs | **13 ns** | **92x** |
-
-### Standard Clause
-
-| Operation | Time |
-|-----------|------|
-| Clause evaluate (16 features) | 23 ns |
-| Clause evaluate (64 features) | 100 ns |
-| Predict (10 clauses) | 1.1 µs |
-| Train epoch (100 samples) | 1.1 ms |
-
-### Optimizations
-
-- `#[repr(align(64))]` - cache-line alignment
-- `get_unchecked()` - bounds check elimination
-- `#[inline(always)]` - forced inlining
-- `BitwiseClause` - 64 features per CPU instruction
-- `SmallClause<N>` - const generics, stack allocation
-- `div_ceil()` - Rust 1.73+ intrinsic
-
-> [!TIP]
-> Use `BitwiseClause` for datasets with 64+ features for maximum performance.
-
-<div align="right"><a href="#top">Back to top</a></div>
-
----
-
-## Examples
-
-```bash
-cargo run --example xor
-cargo run --example iris
-cargo run --release --example benchmark_advanced
-```
-
-<div align="right"><a href="#top">Back to top</a></div>
-
----
-
-## Feature Flags
-
-| Feature | Description |
-|---------|-------------|
-| `std` (default) | Standard library support |
-| `simd` | SIMD optimization (requires nightly) |
-| `parallel` | Parallel training with rayon |
-| `serde` | Serialization support |
-
-> [!WARNING]
-> The `simd` feature requires Rust nightly toolchain.
-
-<div align="right"><a href="#top">Back to top</a></div>
-
----
-
-## API Overview
-
-| Type | Description |
-|------|-------------|
-| `TsetlinMachine` | Binary classification |
-| `MultiClass` | Multi-class classification |
-| `Regressor` | Regression |
-| `Convolutional` | 2D image classification |
-| `BitwiseClause` | 64 features per AND operation |
-| `SmallClause<N>` | Const-generic stack-allocated clause |
-| `SmallTsetlinMachine<N, C>` | Compile-time optimized TM |
-| `AdvancedOptions` | Weighted clauses, adaptive T, pruning |
-
-<div align="right"><a href="#top">Back to top</a></div>
-
----
-
-## Algorithm Details
-
-<details>
-<summary><strong>Tsetlin Machine Algorithm</strong></summary>
-
-### How It Works
-
-A Tsetlin Machine is a propositional logic-based machine learning algorithm. It learns patterns as conjunctions (AND) of literals.
-
-**Core Components:**
-
-1. **Tsetlin Automaton** - A finite state machine with 2N states:
-   - States 1..N → action = `exclude` (literal not in clause)
-   - States N+1..2N → action = `include` (literal in clause)
-   - `increment()` → move toward include
-   - `decrement()` → move toward exclude
-
-2. **Clause** - A conjunction of literals:
-   - Each feature `x_k` has two automata: one for `x_k`, one for `NOT x_k`
-   - Clause fires when ALL included literals are satisfied
-   - Has polarity (+1 or -1) for voting
-
-3. **Voting** - Classification by majority:
-   - Sum all clause votes: `Σ(polarity × fires)`
-   - Positive sum → class 1, negative → class 0
-
-**Training Feedback:**
-
-| Type | When | Effect |
-|------|------|--------|
-| **Type I** | Correct class, clause should fire | Reinforce matching patterns |
-| **Type II** | Wrong class, clause fires | Add literals to block false positive |
-
-**Key Parameters:**
-
-| Parameter | Symbol | Effect |
-|-----------|--------|--------|
-| Clauses | C | More clauses = more patterns, slower training |
-| States | N | Higher = slower learning, more stability |
-| Threshold | T | Controls learning probability |
-| Specificity | s | Higher = more specific patterns (fewer literals) |
-
-</details>
-
-<details>
-<summary><strong>Clause Types Comparison</strong></summary>
-
-### Clause Implementations
-
-This library provides three clause types optimized for different scenarios:
-
-#### 1. `Clause` - Dynamic, Heap-Allocated
+One-vs-all ensemble of binary classifiers.
 
 ```rust
-use tsetlin_rs::Clause;
+use tsetlin_rs::{Config, MultiClass};
 
-let clause = Clause::new(n_features, n_states, polarity);
-clause.evaluate(&input);  // &[u8]
+let config = Config::builder().clauses(100).features(64).build().unwrap();
+let mut tm = MultiClass::new(config, 10, 15);  // 10 classes
+
+tm.fit(&x_train, &y_train, 100, 42);
+let class = tm.predict(&x_test[0]);  // 0..9
 ```
 
-**Memory Layout (64-byte aligned):**
+### Regression — `Regressor`
+
+Continuous output via clause voting with binning.
+
+```rust
+use tsetlin_rs::{Config, Regressor};
+
+let config = Config::builder().clauses(100).features(64).build().unwrap();
+let mut reg = Regressor::new(config, 15);
+
+reg.fit(&x_train, &y_train, 100, 42);
+let value = reg.predict(&x_test[0]);  // f32
 ```
-Clause {
-    automata:    Vec<Automaton>  // 24 bytes (ptr + len + cap)
-    n_features:  usize           // 8 bytes
-    weight:      f32             // 4 bytes
-    activations: u32             // 4 bytes
-    correct:     u32             // 4 bytes
-    incorrect:   u32             // 4 bytes
-    polarity:    i8              // 1 byte + 7 padding
+
+### Convolutional — `Convolutional`
+
+2D patch extraction for image-like data.
+
+```rust
+use tsetlin_rs::{ConvConfig, Convolutional};
+
+let config = ConvConfig {
+    clauses: 100,
+    image_height: 28,
+    image_width: 28,
+    patch_height: 10,
+    patch_width: 10,
+    n_classes: 10,
+};
+let mut ctm = Convolutional::new(config, 15);
+```
+
+<div align="right"><a href="#top">Back to top</a></div>
+
+---
+
+## Parallel Training
+
+This implementation provides **lock-free parallel training** based on the [Massively Parallel and Asynchronous Tsetlin Machine Architecture (ICML 2021)](https://arxiv.org/abs/2009.04861).
+
+### The Problem
+
+Traditional TM training requires synchronization barriers:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                     TRADITIONAL (SYNCHRONOUS)                          │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  [Clause 0] ──┐                                                        │
+│  [Clause 1] ──┼──► BARRIER ──► Sum Votes ──► BARRIER ──► Feedback      │
+│  [Clause 2] ──┤        ▲                          ▲                    │
+│      ...      │        │                          │                    │
+│  [Clause N] ──┘    wait all                   wait all                 │
+│                                                                        │
+│  Problem: Threads idle during barriers = poor scaling                  │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### The Solution: Async Local Voting Tallies
+
+Each training sample maintains its own **atomic vote accumulator**. Clauses update tallies via `fetch_add` without synchronization.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                      PARALLEL V1 (ASYNC TALLIES)                       │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  Sample 0: LocalTally ─────────────────────────────────────────────┐   │
+│  Sample 1: LocalTally ─────────────────────────────────────────────┤   │
+│  Sample N: LocalTally ─────────────────────────────────────────────┘   │
+│                 ▲                                                      │
+│                 │ atomic fetch_add (no locks)                          │
+│                 │                                                      │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │  Thread 0   │  Thread 1   │  Thread 2   │   ...   │  Thread M   │   │
+│  │ [Sample 0]  │ [Sample 1]  │ [Sample 2]  │         │ [Sample N]  │   │
+│  │  eval all   │  eval all   │  eval all   │         │  eval all   │   │
+│  │  clauses    │  clauses    │  clauses    │         │  clauses    │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                                                        │
+│  Speedup: 1.5x (evaluation parallel, feedback sequential)              │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### Parallel V2: Fully Parallel Feedback
+
+V2 parallelizes the feedback phase by processing **clauses** instead of samples:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                     PARALLEL V2 (FULLY PARALLEL)                       │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  Key insight: Each clause's automata occupy DISJOINT memory regions    │
+│                                                                        │
+│  states: [clause_0_automata | clause_1_automata | ... | clause_N]      │
+│           ▲                   ▲                         ▲              │
+│           │                   │                         │              │
+│        Thread 0            Thread 1                  Thread N          │
+│      (no conflict)       (no conflict)             (no conflict)       │
+│                                                                        │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │  Clause 0        │  Clause 1        │   ...   │  Clause N       │   │
+│  │  ├─ sample 0     │  ├─ sample 0     │         │  ├─ sample 0    │   │
+│  │  ├─ sample 1     │  ├─ sample 1     │         │  ├─ sample 1    │   │
+│  │  └─ sample N     │  └─ sample N     │         │  └─ sample N    │   │
+│  │  [feedback all]  │  [feedback all]  │         │  [feedback all] │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                                                        │
+│  Speedup: 4.4x (both evaluation AND feedback parallel)                 │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### Usage
+
+```rust
+use tsetlin_rs::{ClauseBank, ParallelBatch};
+
+// Create clause bank and batch
+let mut bank = ClauseBank::new(100, 64, 100);  // 100 clauses, 64 features
+let batch = ParallelBatch::new(&x_train, &y_train);
+
+for epoch in 0..100 {
+    // V1: Parallel evaluation, sequential feedback (1.5x speedup)
+    bank.train_parallel(&batch, 15.0, 3.9, epoch as u64);
+
+    // V2: Fully parallel (4.4x speedup) — RECOMMENDED
+    bank.train_parallel_v2(&batch, 15.0, 3.9, epoch as u64);
 }
-// Total: 56 bytes + heap allocation for automata
+
+// Inference
+let vote_sum = bank.sum_votes(&x_test[0]);
+let prediction = if vote_sum >= 0.0 { 1 } else { 0 };
 ```
 
-**When to use:**
-- Feature count unknown at compile time
-- Large feature sets (1000+)
-- Need serialization (serde)
+### Implementation Details
 
----
-
-#### 2. `SmallClause<N>` - Const Generic, Stack-Allocated
+#### LocalTally — Atomic Vote Accumulator
 
 ```rust
-use tsetlin_rs::SmallClause;
-
-let clause: SmallClause<4> = SmallClause::new(100, 1);
-clause.evaluate(&[1, 0, 1, 0]);  // &[u8; N]
-```
-
-**Memory Layout:**
-```
-SmallClause<N> {
-    include:     [Automaton; N]  // N × 4 bytes
-    negated:     [Automaton; N]  // N × 4 bytes
-    weight:      f32             // 4 bytes
-    activations: u32             // 4 bytes
-    correct:     u32             // 4 bytes
-    incorrect:   u32             // 4 bytes
-    polarity:    i8              // 1 byte
+pub struct LocalTally {
+    tally: CachePadded<AtomicI64>  // 128 bytes (cache line padded)
 }
-// Total: 8N + 17 bytes (no heap)
 ```
 
-**When to use:**
-- Feature count known at compile time
-- Small to medium features (≤64)
-- Maximum performance needed
-- Embedded / no_std environments
-
-**Type Aliases:**
-```rust
-type Clause2 = SmallClause<2>;   // XOR
-type Clause4 = SmallClause<4>;   // Small problems
-type Clause8 = SmallClause<8>;
-type Clause16 = SmallClause<16>;
-type Clause32 = SmallClause<32>;
-type Clause64 = SmallClause<64>;
-```
-
----
-
-#### 3. `BitwiseClause` / `SmallBitwiseClause<N, W>` - Packed Bitmasks
+- **CachePadded**: Prevents false sharing between CPU cores
+- **AtomicI64**: Lock-free concurrent updates
+- **Scaled integers**: `f32` weights → `i64 * 10000` for atomics
 
 ```rust
-use tsetlin_rs::{BitwiseClause, pack_input};
+const WEIGHT_SCALE: i64 = 10_000;  // 4 decimal precision
 
-let mut clause = BitwiseClause::new(64, 100, 1);
-// After training:
-clause.rebuild_masks();
-let packed = pack_input(&input);
-clause.evaluate_packed(&packed);  // 64 features per AND
+// Accumulate vote (thread-safe)
+tally.fetch_add((polarity * weight * SCALE) as i64, Ordering::Relaxed);
+
+// Read final sum
+let sum = tally.load(Ordering::Acquire) as f32 / SCALE as f32;
 ```
 
-**How it works:**
-1. Automata states → bitmasks (`include`, `negated`)
-2. Input → packed u64 words
-3. Evaluation: `(include & !x) | (negated & x) == 0`
+#### ParallelBatch — Training Data Container
 
-**Performance:**
-```
-64 features:  1 u64 comparison  →  25x faster
-256 features: 4 u64 comparisons →  62x faster
-1024 features: 16 u64 comparisons → 92x faster
-```
-
-**Const Generic Version:**
 ```rust
-use tsetlin_rs::{SmallBitwiseClause, pack_input_small};
-
-// N=64 features, W=1 word
-let mut clause: SmallBitwiseClause<64, 1> = SmallBitwiseClause::new(100, 1);
-clause.rebuild_masks();
-let packed: [u64; 1] = pack_input_small(&input);
-clause.evaluate_packed(&packed);
+pub struct ParallelBatch<'a> {
+    pub inputs: &'a [Vec<u8>],   // Feature vectors
+    pub labels: &'a [u8],        // Target labels
+    tallies: Vec<LocalTally>,    // One per sample (cache-aligned)
+}
 ```
 
-**Type Aliases:**
-```rust
-type BitwiseClause64 = SmallBitwiseClause<64, 1>;
-type BitwiseClause128 = SmallBitwiseClause<128, 2>;
-type BitwiseClause256 = SmallBitwiseClause<256, 4>;
-```
+#### Memory Ordering
 
----
+| Operation | Ordering | Rationale |
+|-----------|----------|-----------|
+| `tally.fetch_add()` | `Relaxed` | Addition is commutative |
+| `tally.load()` | `Acquire` | Synchronize-with all prior stores |
+| `tally.store(0)` | `Relaxed` | Reset before new epoch |
 
 ### Performance Comparison
 
-| Type | 16 features | 64 features | 256 features | Heap |
-|------|-------------|-------------|--------------|------|
-| `Clause` | 23 ns | 100 ns | 300 ns | Yes |
-| `SmallClause<N>` | 15 ns | 60 ns | 240 ns | No |
-| `BitwiseClause` | 8 ns | 3 ns | 4.8 ns | Yes |
-| `SmallBitwiseClause<N,W>` | 6 ns | 2.5 ns | 4 ns | No |
+100 clauses, 64 features, 1 epoch:
 
-</details>
+| Samples | Sequential | V1 (par eval) | V2 (fully par) | Speedup |
+|---------|------------|---------------|----------------|---------|
+| 100 | 2.93 ms | 2.00 ms | **0.81 ms** | **3.6x** |
+| 500 | 14.96 ms | 10.11 ms | **3.39 ms** | **4.4x** |
+| 1000 | 29.15 ms | 19.92 ms | **6.58 ms** | **4.4x** |
 
-<details>
-<summary><strong>SmallTsetlinMachine - Compile-Time Optimization</strong></summary>
+Original CUDA implementation reports **50x speedup** on GPU.
 
-### Stack-Allocated Tsetlin Machine
+<div align="right"><a href="#top">Back to top</a></div>
 
-`SmallTsetlinMachine<N, C>` is a fully compile-time optimized binary classifier:
+---
 
-```rust
-use tsetlin_rs::SmallTsetlinMachine;
+## Clause Implementations
 
-// N=2 features, C=20 clauses
-let mut tm: SmallTsetlinMachine<2, 20> = SmallTsetlinMachine::new(100, 15);
-
-let x = [[0, 0], [0, 1], [1, 0], [1, 1]];
-let y = [0u8, 1, 1, 0];
-
-tm.fit(&x, &y, 200, 42);
-assert!(tm.evaluate(&x, &y) >= 0.75);
-```
-
-**Benefits:**
-
-| Feature | Dynamic TM | SmallTsetlinMachine |
-|---------|------------|---------------------|
-| Heap allocations | O(clauses) | 0 |
-| Loop unrolling | None | Full |
-| Cache locality | Fragmented | Contiguous |
-| Compile-time checks | None | Type-level |
-| Typical speedup | 1x | 2-3x |
-
-**Type Aliases:**
-```rust
-type TM2x20 = SmallTsetlinMachine<2, 20>;    // XOR
-type TM4x40 = SmallTsetlinMachine<4, 40>;    // Small
-type TM8x80 = SmallTsetlinMachine<8, 80>;    // Medium
-type TM16x160 = SmallTsetlinMachine<16, 160>; // Large
-```
-
-**Memory Layout:**
-```rust
-SmallTsetlinMachine<N, C> {
-    clauses: [SmallClause<N>; C],  // C × (8N + 17) bytes
-    s:       f32,                   // 4 bytes
-    t:       f32,                   // 4 bytes
-}
-// Example: TM2x20 = 20 × 33 + 8 = 668 bytes (stack)
-// Compare: TsetlinMachine = ~2KB + heap
-```
-
-**When to use:**
-- Known dimensions at compile time
-- Performance-critical inner loops
-- Embedded systems
-- Batch inference with fixed input size
-
-**Limitations:**
-- No serde (const generic arrays)
-- Dimensions must be literals or const
-- Large N×C may overflow stack
-
-</details>
-
-<details>
-<summary><strong>Choosing the Right Implementation</strong></summary>
+This library provides four clause types optimized for different scenarios:
 
 ### Decision Guide
 
@@ -480,109 +414,590 @@ SmallTsetlinMachine<N, C> {
                    YES                      NO
                     │                       │
             ┌───────┴───────┐               │
-            │ N ≤ 64?       │               ▼
+            │   N ≤ 64?     │               ▼
             └───────┬───────┘       ┌───────────────┐
                     │               │    Clause     │
-            ┌───────┴───────┐       │ (dynamic Vec) │
+            ┌───────┴───────┐       │ (heap, serde) │
             │               │       └───────────────┘
            YES              NO
             │               │
             ▼               ▼
     ┌───────────────┐ ┌─────────────────────┐
-    │ SmallClause<N>│ │SmallBitwiseClause<N>│
-    │ (fastest)     │ │ (N > 64, bitwise)   │
+    │ SmallClause<N>│ │SmallBitwiseClause   │
+    │ (fastest, no  │ │<N,W> (bitwise ops,  │
+    │  heap)        │ │ no heap)            │
     └───────────────┘ └─────────────────────┘
 ```
 
-### Recommendations by Use Case
+### 1. `Clause` — Dynamic, Heap-Allocated
 
-| Use Case | Recommended Type |
-|----------|------------------|
-| XOR / toy problems | `SmallTsetlinMachine<2, 20>` |
-| Iris (4 features) | `SmallTsetlinMachine<4, 100>` |
-| MNIST patches (64) | `SmallBitwiseClause<64, 1>` |
-| Text (10K features) | `BitwiseClause` |
-| Unknown dimensions | `TsetlinMachine` |
-| Serialization needed | `TsetlinMachine` |
-| Embedded / no_std | `SmallClause<N>` |
+```rust
+use tsetlin_rs::Clause;
 
-### Feature Comparison
+let clause = Clause::new(64, 100, 1);  // 64 features, 100 states, +1 polarity
+let fires = clause.evaluate(&input);
+let vote = clause.vote(&input);  // polarity × fires × weight
+```
 
-| Feature | Clause | SmallClause | BitwiseClause | SmallBitwise |
-|---------|--------|-------------|---------------|--------------|
-| Heap-free | :x: | :white_check_mark: | :x: | :white_check_mark: |
-| Serde | :white_check_mark: | :x: | :white_check_mark: | :x: |
-| no_std | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
-| Best for N | any | ≤64 | ≥64 | 64-256 |
-| Loop unroll | :x: | :white_check_mark: | :x: | :white_check_mark: |
+**Memory Layout:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Clause (64-byte aligned)                 │
+├─────────────────────────────────────────────────────────────┤
+│ automata: Vec<Automaton>  │ 24 bytes (ptr + len + cap)      │
+│ n_features: usize         │ 8 bytes                         │
+│ weight: f32               │ 4 bytes                         │
+│ activations: u32          │ 4 bytes                         │
+│ correct: u32              │ 4 bytes                         │
+│ incorrect: u32            │ 4 bytes                         │
+│ polarity: i8              │ 1 byte + 7 padding              │
+├─────────────────────────────────────────────────────────────┤
+│ + heap: [Automaton; 2N]   │ 8N bytes                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Best for:** Unknown dimensions, serialization, large feature sets (1000+)
+
+---
+
+### 2. `SmallClause<N>` — Const Generic, Stack-Allocated
+
+```rust
+use tsetlin_rs::{SmallClause, Clause16};
+
+let clause: Clause16 = SmallClause::new(100, 1);
+let fires = clause.evaluate(&[1, 0, 1, 0, ...]);  // [u8; 16]
+```
+
+**Memory Layout:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│              SmallClause<N> (stack-allocated)               │
+├─────────────────────────────────────────────────────────────┤
+│ include: [Automaton; N]   │ 4N bytes                        │
+│ negated: [Automaton; N]   │ 4N bytes                        │
+│ weight: f32               │ 4 bytes                         │
+│ activations: u32          │ 4 bytes                         │
+│ correct: u32              │ 4 bytes                         │
+│ incorrect: u32            │ 4 bytes                         │
+│ polarity: i8              │ 1 byte                          │
+├─────────────────────────────────────────────────────────────┤
+│ Total: 8N + 17 bytes (NO HEAP)                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Type Aliases:**
+```rust
+type Clause2  = SmallClause<2>;   // XOR problems
+type Clause4  = SmallClause<4>;   // Iris dataset
+type Clause8  = SmallClause<8>;
+type Clause16 = SmallClause<16>;
+type Clause32 = SmallClause<32>;
+type Clause64 = SmallClause<64>;  // Maximum before bitwise
+```
+
+**Best for:** Known dimensions, embedded/no_std, maximum performance
+
+---
+
+### 3. `BitwiseClause` — Packed Bitmask Evaluation
+
+Evaluates 64 features per CPU instruction using bitwise AND.
+
+```rust
+use tsetlin_rs::{BitwiseClause, pack_input};
+
+let mut clause = BitwiseClause::new(256, 100, 1);
+// ... training ...
+clause.rebuild_masks();  // Compile automata → bitmasks
+
+let packed = pack_input(&input);  // Vec<u64>
+let fires = clause.evaluate_packed(&packed);
+```
+
+**Evaluation Algorithm:**
+```
+Input:   x = [1,0,1,1,0,0,1,0, ...]  →  packed: 0b01001101...
+Include mask: 0b00001101  (positions where x_k must be 1)
+Negated mask: 0b00100010  (positions where x_k must be 0)
+
+Clause fires iff: (include & !x) | (negated & x) == 0
+
+Example:
+  include = 0b00001101
+  negated = 0b00100010
+  x       = 0b01001101
+
+  include & !x = 0b00001101 & 0b10110010 = 0b00000000
+  negated & x  = 0b00100010 & 0b01001101 = 0b00000000
+  result = 0b00000000 → fires = true
+```
+
+**Performance:**
+```
+64 features:   1 u64 AND    →   43x faster than scalar
+256 features:  4 u64 ANDs   →   85x faster
+1024 features: 16 u64 ANDs  →  116x faster
+```
+
+---
+
+### 4. `SmallBitwiseClause<N, W>` — Const Generic Bitwise
+
+```rust
+use tsetlin_rs::{SmallBitwiseClause, BitwiseClause64, pack_input_small};
+
+let mut clause: BitwiseClause64 = SmallBitwiseClause::new(100, 1);
+clause.rebuild_masks();
+
+let packed: [u64; 1] = pack_input_small(&input);
+let fires = clause.evaluate_packed(&packed);
+```
+
+**Type Aliases:**
+```rust
+type BitwiseClause64  = SmallBitwiseClause<64, 1>;   // 1 word
+type BitwiseClause128 = SmallBitwiseClause<128, 2>;  // 2 words
+type BitwiseClause256 = SmallBitwiseClause<256, 4>;  // 4 words
+```
+
+---
+
+### Performance Comparison
+
+| Type | 16 features | 64 features | 256 features | Heap |
+|------|-------------|-------------|--------------|:----:|
+| `Clause` | 23 ns | 100 ns | 300 ns | Yes |
+| `SmallClause<N>` | 15 ns | 60 ns | 240 ns | No |
+| `BitwiseClause` | 8 ns | **3 ns** | **4.8 ns** | Yes |
+| `SmallBitwiseClause<N,W>` | 6 ns | **2.5 ns** | **4 ns** | No |
+
+<div align="right"><a href="#top">Back to top</a></div>
+
+---
+
+## Advanced Features
+
+### Weighted Clauses
+
+Clauses learn accuracy-based weights during training:
+
+```rust
+use tsetlin_rs::{Config, TsetlinMachine, AdvancedOptions};
+
+let opts = AdvancedOptions {
+    weight_lr: 0.08,    // Learning rate for weight updates
+    weight_min: 0.3,    // Minimum weight (prevents dead clauses)
+    weight_max: 1.5,    // Maximum weight (prevents dominance)
+    ..Default::default()
+};
+
+let config = Config::builder().clauses(100).features(64).build().unwrap();
+let mut tm = TsetlinMachine::with_advanced(config, 15, opts);
+```
+
+**Weight Update Rule:**
+```
+After each prediction:
+  if clause_correct:
+    weight += weight_lr × (weight_max - weight)
+  else:
+    weight -= weight_lr × (weight - weight_min)
+```
+
+---
+
+### Adaptive Threshold
+
+Dynamic T adjustment based on training error:
+
+```rust
+let opts = AdvancedOptions {
+    adaptive_t: true,
+    t_min: 5.0,         // Lower bound
+    t_max: 30.0,        // Upper bound
+    t_lr: 0.02,         // Learning rate
+    ..Default::default()
+};
+```
+
+**Adaptation Rule:**
+```
+if accuracy < target:
+    T += t_lr × (t_max - T)   // Increase → more aggressive learning
+else:
+    T -= t_lr × (T - t_min)   // Decrease → more conservative
+```
+
+---
+
+### Clause Pruning
+
+Automatic reset of ineffective clauses:
+
+```rust
+let opts = AdvancedOptions {
+    prune_threshold: 3,   // Min activations per epoch
+    prune_weight: 0.25,   // Min weight to survive
+    ..Default::default()
+};
+```
+
+**Pruning Criteria:**
+```
+if clause.activations < prune_threshold OR clause.weight < prune_weight:
+    reset_clause_to_initial_state()
+```
+
+---
+
+### Complete Example
+
+```rust
+use tsetlin_rs::{Config, TsetlinMachine, AdvancedOptions};
+
+let opts = AdvancedOptions {
+    // Adaptive threshold
+    adaptive_t: true,
+    t_min: 5.0,
+    t_max: 30.0,
+    t_lr: 0.02,
+
+    // Weighted clauses
+    weight_lr: 0.08,
+    weight_min: 0.3,
+    weight_max: 1.5,
+
+    // Clause pruning
+    prune_threshold: 3,
+    prune_weight: 0.25,
+};
+
+let config = Config::builder().clauses(40).features(8).build().unwrap();
+let mut tm = TsetlinMachine::with_advanced(config, 15, opts);
+
+tm.fit(&x_train, &y_train, 100, 42);
+```
+
+### When to Use Advanced Features
+
+| Scenario | Standard | Advanced | Winner |
+|----------|:--------:|:--------:|:------:|
+| Clean data (0% noise) | 97.5% | **100%** | Advanced |
+| High noise (30%+) | 55.9% | **58.8%** | Advanced |
+| Large scale (32+ features) | 76.4% | **77.7%** | Advanced |
+| Complex patterns (parity) | 49.1% | **50.5%** | Advanced |
+| Simple patterns, low noise | **82.8%** | 81.1% | Standard |
+
+<div align="right"><a href="#top">Back to top</a></div>
+
+---
+
+## Benchmarks
+
+### Parallel Training
+
+100 clauses, 64 features, 1 epoch:
+
+| Samples | Sequential | Parallel v1 | Parallel v2 | Speedup |
+|---------|------------|-------------|-------------|---------|
+| 100 | 2.93 ms | 2.00 ms | **0.81 ms** | **3.6x** |
+| 500 | 14.96 ms | 10.11 ms | **3.39 ms** | **4.4x** |
+| 1000 | 29.15 ms | 19.92 ms | **6.58 ms** | **4.4x** |
+
+### Bitwise Evaluation
+
+| Features | Scalar | Bitwise | Speedup |
+|----------|--------|---------|---------|
+| 64 | 82 ns | **1.9 ns** | **43x** |
+| 256 | 342 ns | **4 ns** | **85x** |
+| 1024 | 1.32 µs | **11 ns** | **116x** |
+
+### Storage Layouts
+
+| Clauses | AoS (Vec<Clause>) | SoA (ClauseBank) | Speedup |
+|---------|-------------------|------------------|---------|
+| 50 | 3.64 µs | **3.50 µs** | 1.04x |
+| 100 | 8.55 µs | **8.39 µs** | 1.02x |
+| 200 | 18.50 µs | **16.02 µs** | **1.15x** |
+
+### BitPlaneBank (Parallel State Updates)
+
+| Operation | ClauseBank | BitPlaneBank | Speedup |
+|-----------|------------|--------------|---------|
+| Type II (1024 features) | 1.48 µs | **759 ns** | **~2x** |
+| Type II (256 features) | 426 ns | **330 ns** | **~1.3x** |
+| Type I (1024 features) | 5.05 µs | 5.25 µs | ~1x |
+
+### Run Benchmarks
+
+```bash
+cargo bench --features parallel
+cargo bench --features parallel -- parallel_vs_sequential
+cargo bench -- bitwise
+```
+
+<div align="right"><a href="#top">Back to top</a></div>
+
+---
+
+## Algorithm Reference
+
+<details>
+<summary><strong>Tsetlin Automaton</strong></summary>
+
+### Finite State Machine
+
+A Tsetlin Automaton (TA) is a 2N-state FSM that learns a binary action through reinforcement:
+
+```
+         EXCLUDE ZONE              │              INCLUDE ZONE
+    ◄─────────────────────────────│───────────────────────────────►
+                                   │
+    ┌───┬───┬───┬───┬─────────────┼───┬───────────┬───┬───┬───┐
+    │ 1 │ 2 │ 3 │...│      N      │N+1│    ...    │...│2N-1│2N │
+    └───┴───┴───┴───┴─────────────┼───┴───────────┴───┴───┴───┘
+      ▲                           │                           ▲
+      │                           │                           │
+    floor                     threshold                    ceiling
+    (min)                                                   (max)
+
+    Action = EXCLUDE              │              Action = INCLUDE
+    if state ∈ [1, N]             │              if state ∈ [N+1, 2N]
+```
+
+**State Transitions:**
+
+| Feedback | Current State | Action |
+|----------|---------------|--------|
+| Reward | s ∈ [1, N] | s → max(1, s-1) |
+| Reward | s ∈ [N+1, 2N] | s → min(2N, s+1) |
+| Penalty | s ∈ [1, N] | s → min(N, s+1) |
+| Penalty | s ∈ [N+1, 2N] | s → max(N+1, s-1) |
 
 </details>
 
 <details>
-<summary><strong>Memory Layout & Alignment</strong></summary>
+<summary><strong>Clause Structure</strong></summary>
 
-### Cache Optimization
+### Conjunction of Literals
 
-All clause types use `#[repr(align(64))]` for cache-line alignment:
+A clause is a conjunction (AND) of literals that votes for or against a class:
 
-```rust
-#[repr(align(64))]  // 64-byte cache line
-pub struct Clause { ... }
+```
+Clause_j = L₁ ∧ L₂ ∧ ... ∧ Lₘ
 
-#[repr(align(64))]
-pub struct SmallClause<const N: usize> { ... }
-
-#[repr(align(64))]
-pub struct BitwiseClause { ... }
+where each Lᵢ ∈ {xₖ, ¬xₖ} for some feature k
 ```
 
-**Why 64-byte alignment?**
-- Modern CPUs fetch 64 bytes per cache line
-- Aligned structs avoid cache line splits
-- Reduces memory latency by 10-30%
+**Example (XOR):**
+```
+Clause₊₁: x₀ ∧ ¬x₁     (fires when x=[1,0])
+Clause₊₂: ¬x₀ ∧ x₁     (fires when x=[1,0])
+Clause₋₁: x₀ ∧ x₁      (fires when x=[1,1])
+Clause₋₂: ¬x₀ ∧ ¬x₁    (fires when x=[0,0])
+```
 
-### Automaton Representation
-
+**Evaluation:**
 ```rust
-pub struct Automaton {
-    state:    i16,  // Current state (1..2N)
-    n_states: i16,  // Threshold for action
+fn evaluate(clause: &Clause, x: &[u8]) -> bool {
+    for k in 0..n_features {
+        // Check positive literal x_k
+        if clause.include[k].action() == INCLUDE && x[k] == 0 {
+            return false;  // Violation
+        }
+        // Check negative literal ¬x_k
+        if clause.negated[k].action() == INCLUDE && x[k] == 1 {
+            return false;  // Violation
+        }
+    }
+    true  // All included literals satisfied
 }
-// 4 bytes per automaton
 ```
-
-**State machine:**
-```
-exclude zone          include zone
-  [1]...[N]    |    [N+1]...[2N]
-     ←──────   |   ──────→
-  decrement    |   increment
-```
-
-### Packed Bitmask Layout
-
-```rust
-// BitwiseClause for 128 features:
-include: [u64; 2]  // 16 bytes
-negated: [u64; 2]  // 16 bytes
-
-// Bit k of word[k/64] represents feature k
-// bit 0 of word[0] = feature 0
-// bit 63 of word[0] = feature 63
-// bit 0 of word[1] = feature 64
-// ...
-```
-
-### Memory Usage Examples
-
-| Type | N=4 | N=64 | N=256 |
-|------|-----|------|-------|
-| Clause | 88 + 32 heap | 88 + 512 heap | 88 + 2KB heap |
-| SmallClause | 49 bytes | 529 bytes | 2KB |
-| BitwiseClause | 88 + 32 heap | 88 + 512 heap | 88 + 2KB heap |
-| SmallBitwiseClause | 65 bytes | 545 bytes | 2KB |
 
 </details>
+
+<details>
+<summary><strong>Voting Mechanism</strong></summary>
+
+### Weighted Majority Vote
+
+Classification is determined by summing weighted clause votes:
+
+```
+         C/2
+v(x) =   Σ   [polarityⱼ × weightⱼ × clauseⱼ(x)]
+        j=1
+
+ŷ = { 1  if v(x) ≥ 0
+    { 0  if v(x) < 0
+```
+
+**Polarity Assignment:**
+- Even-indexed clauses: polarity = +1 (vote for class 1)
+- Odd-indexed clauses: polarity = -1 (vote for class 0)
+
+</details>
+
+<details>
+<summary><strong>Type I Feedback</strong></summary>
+
+### Reinforcing Target Patterns
+
+Applied when the sample belongs to the clause's target class.
+
+**When clause FIRES (satisfies input):**
+
+| Input | Literal | Probability | Action |
+|-------|---------|-------------|--------|
+| xₖ = 1 | xₖ | (s-1)/s | Increment (strengthen) |
+| xₖ = 1 | ¬xₖ | 1/s | Decrement (weaken) |
+| xₖ = 0 | xₖ | 1/s | Decrement (weaken) |
+| xₖ = 0 | ¬xₖ | (s-1)/s | Increment (strengthen) |
+
+**When clause DOES NOT FIRE:**
+
+All automata decremented with probability 1/s (drift toward exclusion).
+
+**Effect:** Reinforces literals that match the input pattern.
+
+</details>
+
+<details>
+<summary><strong>Type II Feedback</strong></summary>
+
+### Blocking False Positives
+
+Applied when a clause fires for the WRONG class.
+
+**Algorithm:**
+```rust
+fn type_ii(clause: &mut Clause, x: &[u8]) {
+    for k in 0..n_features {
+        if x[k] == 0 {
+            // x_k is FALSE → include x_k to block (will fail since x_k=0)
+            if clause.include[k].state <= N {
+                clause.include[k].increment();
+            }
+        } else {
+            // x_k is TRUE → include ¬x_k to block (will fail since x_k=1)
+            if clause.negated[k].state <= N {
+                clause.negated[k].increment();
+            }
+        }
+    }
+}
+```
+
+**Effect:** Adds a contradicting literal that will fail on this input.
+
+</details>
+
+<details>
+<summary><strong>Training Algorithm</strong></summary>
+
+### Complete Training Loop
+
+```rust
+fn train_epoch(tm: &mut TsetlinMachine, X: &[Vec<u8>], Y: &[u8], T: f32, s: f32) {
+    for (x, y) in X.iter().zip(Y.iter()) {
+        // 1. Compute vote sum (clamped to [-T, T])
+        let v = tm.sum_votes(x).clamp(-T, T);
+
+        // 2. Compute feedback probability
+        let p = if *y == 1 {
+            (T - v) / (2.0 * T)   // Higher prob when v is low (need more +1 votes)
+        } else {
+            (T + v) / (2.0 * T)   // Higher prob when v is high (need more -1 votes)
+        };
+
+        // 3. Apply feedback to each clause
+        for (j, clause) in tm.clauses.iter_mut().enumerate() {
+            let polarity = if j % 2 == 0 { 1 } else { -1 };
+            let fires = clause.evaluate(x);
+
+            if random() < p {
+                if (*y == 1 && polarity == 1) || (*y == 0 && polarity == -1) {
+                    // Target class: Type I feedback
+                    type_i(clause, x, fires, s);
+                } else if fires {
+                    // Wrong class AND clause fired: Type II feedback
+                    type_ii(clause, x);
+                }
+            }
+        }
+    }
+}
+```
+
+### Parameter Effects
+
+| Parameter | Low Value | High Value |
+|-----------|-----------|------------|
+| **Clauses (C)** | Fewer patterns, faster | More patterns, slower |
+| **States (N)** | Fast adaptation, unstable | Slow adaptation, stable |
+| **Threshold (T)** | Conservative learning | Aggressive learning |
+| **Specificity (s)** | General patterns (more literals) | Specific patterns (fewer literals) |
+
+</details>
+
+<div align="right"><a href="#top">Back to top</a></div>
+
+---
+
+## API Reference
+
+### Models
+
+| Type | Description |
+|------|-------------|
+| `TsetlinMachine` | Binary classification |
+| `MultiClass` | Multi-class (one-vs-all) |
+| `Regressor` | Continuous output |
+| `Convolutional` | 2D patch extraction |
+
+### Clauses
+
+| Type | Heap | Best For |
+|------|:----:|----------|
+| `Clause` | Yes | Dynamic dimensions, serde |
+| `SmallClause<N>` | No | N ≤ 64, maximum speed |
+| `BitwiseClause` | Yes | N ≥ 64, 25-92x speedup |
+| `SmallBitwiseClause<N,W>` | No | 64-256 features |
+
+### Storage
+
+| Type | Description |
+|------|-------------|
+| `ClauseBank` | SoA layout for bulk operations |
+| `BitPlaneBank` | Bit-plane for parallel updates |
+
+### Parallel Training
+
+| Type | Description |
+|------|-------------|
+| `LocalTally` | Cache-padded atomic accumulator |
+| `ParallelBatch` | Training batch with tallies |
+
+### Configuration
+
+| Type | Description |
+|------|-------------|
+| `Config` | Basic TM configuration |
+| `ConfigBuilder` | Fluent configuration builder |
+| `ConvConfig` | Convolutional TM configuration |
+| `AdvancedOptions` | Weights, adaptive T, pruning |
+| `FitOptions` | Early stopping, callbacks |
+
+### Utilities
+
+| Function | Description |
+|----------|-------------|
+| `pack_input(&[u8])` | Pack input for BitwiseClause |
+| `pack_input_small(&[u8])` | Pack for SmallBitwiseClause |
+| `pack_batch(&[Vec<u8>])` | Pack multiple inputs |
+| `rng_from_seed(u64)` | Deterministic RNG |
+| `rng_from_entropy()` | Random RNG |
 
 <div align="right"><a href="#top">Back to top</a></div>
 
@@ -595,19 +1010,13 @@ negated: [u64; 2]  // 16 bytes
 
 ### Sunburst
 
-The inner-most circle represents the entire project. Moving outward shows folders, and finally individual files. The **size** of each slice represents the number of statements, while the **color** indicates coverage percentage.
-
 <p align="center">
   <a href="https://codecov.io/gh/RAprogramm/tsetlin-rs">
     <img src="https://codecov.io/gh/RAprogramm/tsetlin-rs/graphs/sunburst.svg?token=dSDoNSNudX" alt="Sunburst"/>
   </a>
 </p>
 
----
-
 ### Grid
-
-Each block represents a single file in the project. The **size** of each block represents the number of statements, while the **color** indicates coverage percentage.
 
 <p align="center">
   <a href="https://codecov.io/gh/RAprogramm/tsetlin-rs">
@@ -615,11 +1024,7 @@ Each block represents a single file in the project. The **size** of each block r
   </a>
 </p>
 
----
-
 ### Icicle
-
-The top section represents the entire project. Below it are folders, and finally individual files. The **size** of each slice represents the number of statements, while the **color** indicates coverage percentage.
 
 <p align="center">
   <a href="https://codecov.io/gh/RAprogramm/tsetlin-rs">
@@ -628,9 +1033,6 @@ The top section represents the entire project. Below it are folders, and finally
 </p>
 
 </details>
-
-> [!TIP]
-> Click on any graph to explore detailed coverage reports on Codecov.
 
 <div align="right"><a href="#top">Back to top</a></div>
 
@@ -652,20 +1054,28 @@ His work on collective automata behavior laid the theoretical foundation for wha
 
 ---
 
-## Based On
+## References
 
-This Rust implementation is based on the original Tsetlin Machine algorithm:
+### Original Paper
 
-> [!NOTE]
-> **Paper:** [The Tsetlin Machine - A Game Theoretic Bandit Driven Approach to Optimal Pattern Recognition with Propositional Logic](https://arxiv.org/abs/1804.01508)
-> *Ole-Christoffer Granmo, 2018*
+> **The Tsetlin Machine - A Game Theoretic Bandit Driven Approach to Optimal Pattern Recognition with Propositional Logic**
+> Ole-Christoffer Granmo, 2018
+> [arXiv:1804.01508](https://arxiv.org/abs/1804.01508)
 
-**Original C Implementation:** [cair/TsetlinMachineC](https://github.com/cair/TsetlinMachineC)
+### Parallel Training
 
-**Related Resources:**
-- [cair/TsetlinMachine](https://github.com/cair/TsetlinMachine) — Python implementation with datasets
-- [cair/pyTsetlinMachine](https://github.com/cair/pyTsetlinMachine) — Extended Python library
-- [cair/tmu](https://github.com/cair/tmu) — Unified TM with CUDA support
+> **Massively Parallel and Asynchronous Tsetlin Machine Architecture Supporting Almost Constant-Time Scaling**
+> K. Darshana Abeyrathna et al., ICML 2021
+> [arXiv:2009.04861](https://arxiv.org/abs/2009.04861)
+
+### Implementations
+
+| Repository | Description |
+|------------|-------------|
+| [cair/TsetlinMachineC](https://github.com/cair/TsetlinMachineC) | Original C implementation |
+| [cair/pyTsetlinMachine](https://github.com/cair/pyTsetlinMachine) | Python library |
+| [cair/PyTsetlinMachineCUDA](https://github.com/cair/PyTsetlinMachineCUDA) | CUDA implementation |
+| [cair/tmu](https://github.com/cair/tmu) | Unified TM framework |
 
 <div align="right"><a href="#top">Back to top</a></div>
 

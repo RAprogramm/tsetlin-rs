@@ -1,0 +1,27 @@
+name: Test Results
+
+on:
+  workflow_call:
+    secrets:
+      CODECOV_TOKEN:
+        required: false
+
+jobs:
+  test-results:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-nextest
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ubuntu-latest-stable
+          save-if: false
+      - run: cargo nextest run --features "parallel,serde" --profile ci
+        continue-on-error: true
+      - if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: target/nextest/ci/junit.xml
+          report_type: test_results

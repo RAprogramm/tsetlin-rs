@@ -1,0 +1,26 @@
+name: Cleanup
+
+on:
+  workflow_call:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CANCELLED=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/actions/runs?branch=${{ github.ref_name }}&status=cancelled&per_page=100" \
+            --jq '.workflow_runs[] | select(.name == "CI") | .id')
+          if [ -z "$CANCELLED" ]; then
+            echo "No cancelled runs to delete"
+            exit 0
+          fi
+          for run_id in $CANCELLED; do
+            echo "Deleting run $run_id"
+            gh api -X DELETE "/repos/${{ github.repository }}/actions/runs/$run_id" || true
+          done

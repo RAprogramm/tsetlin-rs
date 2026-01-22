@@ -1,0 +1,159 @@
+name: Changelog
+
+on:
+  workflow_call:
+    inputs:
+      enabled:
+        type: boolean
+        required: true
+
+jobs:
+  changelog:
+    if: inputs.enabled
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const { execSync } = require('child_process');
+
+            // Store all entries by SHA (guarantees no duplicates)
+            // Map<SHA, { version: string, entry: string }>
+            const entriesBySha = new Map();
+
+            // Parse existing changelog
+            if (fs.existsSync('CHANGELOG.md')) {
+              const existing = fs.readFileSync('CHANGELOG.md', 'utf8');
+
+              // Split by version headers
+              const sections = existing.split(/(?=^## v[\d.]+)/m);
+
+              for (const section of sections) {
+                const versionMatch = section.match(/^## (v[\d.]+)/);
+                if (!versionMatch) continue;
+                const version = versionMatch[1];
+
+                // Extract entries (each starts with "- [`sha`]")
+                const entryRegex = /^- \[`([a-f0-9]{7})`\][^\n]*\n  [^\n]+/gm;
+                let match;
+                while ((match = entryRegex.exec(section)) !== null) {
+                  const sha = match[1];
+                  const entry = match[0];
+                  if (!entriesBySha.has(sha)) {
+                    entriesBySha.set(sha, { version, entry });
+                  }
+                }
+              }
+            }
+
+            console.log(`Existing entries: ${entriesBySha.size}`);
+
+            // Get commits from git
+            const gitLog = execSync('git log -200 --pretty=format:"%H|%h|%s|%an" --no-merges', { encoding: 'utf8' });
+
+            let newCount = 0;
+            for (const line of gitLog.split('\n').filter(l => l)) {
+              const [sha, shaShort, message, author] = line.split('|');
+
+              // Skip if already in changelog
+              if (entriesBySha.has(shaShort)) continue;
+
+              // Skip changelog commits and merges
+              if (message.includes('chore: update changelog')) continue;
+              if (message.includes('Merge pull request')) continue;
+
+              // Get version from Cargo.toml at this commit
+              let version = 'v0.0.0';
+              try {
+                const cargoAtCommit = execSync(`git show ${sha}:Cargo.toml 2>/dev/null`, { encoding: 'utf8' });
+                const vMatch = cargoAtCommit.match(/^version\s*=\s*"([^"]+)"/m);
+                if (vMatch) version = `v${vMatch[1]}`;
+              } catch (e) {
+                console.log(`Could not get version for ${shaShort}`);
+              }
+
+              // Get commit details from GitHub API
+              try {
+                const { data: commitData } = await github.rest.repos.getCommit({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: sha
+                });
+
+                const ghAuthor = commitData.author;
+                const authorAvatar = ghAuthor?.avatar_url
+                  ? `[<img src="${ghAuthor.avatar_url}" width="20" height="20" style="border-radius:50%" title="${ghAuthor.login}"/>](${ghAuthor.html_url})`
+                  : `**${author}**`;
+
+                const repoUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
+                let linkedMessage = message.replace(/#(\d+)/g, `[#$1](${repoUrl}/issues/$1)`);
+
+                // Add emoji for conventional commits
+                const typeMatch = linkedMessage.match(/^(\[#\d+\]\([^)]+\)\s+)?(\w+)(\([^)]+\))?:\s*(.+)$/);
+                if (typeMatch) {
+                  const [, issue = '', type, scope = '', desc] = typeMatch;
+                  const types = {
+                    feat: '✨', fix: '🐛', docs: '📚', style: '💎',
+                    refactor: '♻️', perf: '⚡', test: '🧪', build: '📦',
+                    ci: '🔧', chore: '🔨', revert: '⏪'
+                  };
+                  const emoji = types[type] || '📝';
+                  linkedMessage = `${issue}${emoji} ${type}${scope}: ${desc}`;
+                }
+
+                const entry = `- [\`${shaShort}\`](${commitData.html_url}) ${linkedMessage}\n  ${authorAvatar}`;
+                entriesBySha.set(shaShort, { version, entry });
+                newCount++;
+              } catch (e) {
+                console.log(`Skip ${shaShort}: ${e.message}`);
+              }
+            }
+
+            console.log(`New entries added: ${newCount}`);
+
+            // Group entries by version
+            const byVersion = new Map();
+            for (const [sha, { version, entry }] of entriesBySha) {
+              if (!byVersion.has(version)) {
+                byVersion.set(version, []);
+              }
+              byVersion.get(version).push(entry);
+            }
+
+            // Sort versions (newest first)
+            const sortedVersions = [...byVersion.keys()].sort((a, b) => {
+              const partsA = a.slice(1).split('.').map(Number);
+              const partsB = b.slice(1).split('.').map(Number);
+              for (let i = 0; i < 3; i++) {
+                if ((partsA[i] || 0) !== (partsB[i] || 0)) {
+                  return (partsB[i] || 0) - (partsA[i] || 0);
+                }
+              }
+              return 0;
+            });
+
+            console.log(`Versions in changelog: ${sortedVersions.join(', ')}`);
+
+            // Build changelog
+            let changelog = '# Changelog\n\n---\n\n';
+
+            for (const version of sortedVersions) {
+              changelog += `## ${version}\n\n`;
+              changelog += byVersion.get(version).join('\n\n') + '\n\n';
+            }
+
+            fs.writeFileSync('CHANGELOG.md', changelog);
+
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git diff --staged --quiet || git commit -m "chore: update changelog"
+          git push

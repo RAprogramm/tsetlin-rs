@@ -4,8 +4,8 @@ use core::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use tsetlin_rs::{
-    BitwiseClause, Clause, Clause16, Config, MultiClass, SmallClause, TsetlinMachine, feedback,
-    pack_input, utils::rng_from_seed
+    BitPlaneBank, BitwiseClause, Clause, Clause16, ClauseBank, Config, MultiClass, SmallClause,
+    TsetlinMachine, feedback, pack_input, utils::rng_from_seed
 };
 
 fn bench_clause_evaluate(c: &mut Criterion) {
@@ -191,6 +191,296 @@ fn bench_bitwise(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_aos_vs_soa(c: &mut Criterion) {
+    let mut group = c.benchmark_group("aos_vs_soa");
+
+    for n_clauses in [50, 100, 200] {
+        let n_features = 64;
+        let x: Vec<u8> = (0..n_features).map(|i| (i % 2) as u8).collect();
+
+        // AoS: Vec<Clause>
+        let aos: Vec<Clause> = (0..n_clauses)
+            .map(|i| Clause::new(n_features, 100, if i % 2 == 0 { 1 } else { -1 }))
+            .collect();
+
+        group.bench_with_input(
+            BenchmarkId::new("aos_sum_votes", n_clauses),
+            &n_clauses,
+            |b, _| {
+                b.iter(|| {
+                    let sum: f32 = aos.iter().map(|c| c.vote(black_box(&x))).sum();
+                    black_box(sum)
+                });
+            }
+        );
+
+        // SoA: ClauseBank
+        let soa = ClauseBank::new(n_clauses, n_features, 100);
+
+        group.bench_with_input(
+            BenchmarkId::new("soa_sum_votes", n_clauses),
+            &n_clauses,
+            |b, _| {
+                b.iter(|| black_box(soa.sum_votes(black_box(&x))));
+            }
+        );
+    }
+
+    group.finish();
+}
+
+fn bench_bitplane_evaluate(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bitplane_vs_clausebank_eval");
+
+    for n_features in [64, 256, 1024] {
+        let n_clauses = 100;
+        let x: Vec<u8> = (0..n_features).map(|i| (i % 2) as u8).collect();
+
+        // ClauseBank (SoA)
+        let clausebank = ClauseBank::new(n_clauses, n_features, 100);
+
+        group.bench_with_input(
+            BenchmarkId::new("clausebank", n_features),
+            &n_features,
+            |b, _| {
+                b.iter(|| black_box(clausebank.sum_votes(black_box(&x))));
+            }
+        );
+
+        // BitPlaneBank
+        let bitplane = BitPlaneBank::new(n_clauses, n_features, 100);
+
+        group.bench_with_input(
+            BenchmarkId::new("bitplane", n_features),
+            &n_features,
+            |b, _| {
+                b.iter(|| black_box(bitplane.sum_votes(black_box(&x))));
+            }
+        );
+    }
+
+    group.finish();
+}
+
+fn bench_bitplane_feedback(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bitplane_vs_clausebank_feedback");
+
+    for n_features in [64, 256, 1024] {
+        let x: Vec<u8> = (0..n_features).map(|i| (i % 2) as u8).collect();
+
+        // ClauseBank Type I
+        group.bench_with_input(
+            BenchmarkId::new("clausebank_type_i", n_features),
+            &n_features,
+            |b, &n| {
+                b.iter(|| {
+                    let mut bank = ClauseBank::new(1, n, 100);
+                    let mut rng = rng_from_seed(42);
+                    bank.type_i(0, black_box(&x), true, 3.9, &mut rng);
+                });
+            }
+        );
+
+        // BitPlaneBank Type I
+        group.bench_with_input(
+            BenchmarkId::new("bitplane_type_i", n_features),
+            &n_features,
+            |b, &n| {
+                b.iter(|| {
+                    let mut bank = BitPlaneBank::new(1, n, 100);
+                    let mut rng = rng_from_seed(42);
+                    bank.type_i(0, black_box(&x), true, 3.9, &mut rng);
+                });
+            }
+        );
+
+        // ClauseBank Type II
+        group.bench_with_input(
+            BenchmarkId::new("clausebank_type_ii", n_features),
+            &n_features,
+            |b, &n| {
+                b.iter(|| {
+                    let mut bank = ClauseBank::new(1, n, 50);
+                    bank.type_ii(0, black_box(&x));
+                });
+            }
+        );
+
+        // BitPlaneBank Type II
+        group.bench_with_input(
+            BenchmarkId::new("bitplane_type_ii", n_features),
+            &n_features,
+            |b, &n| {
+                b.iter(|| {
+                    let mut bank = BitPlaneBank::new(1, n, 50);
+                    bank.type_ii(0, black_box(&x));
+                });
+            }
+        );
+    }
+
+    group.finish();
+}
+
+fn bench_bitplane_increment(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bitplane_parallel_increment");
+
+    for n_features in [64, 256, 1024] {
+        // Single increment (baseline)
+        group.bench_with_input(
+            BenchmarkId::new("single_64_increments", n_features),
+            &n_features,
+            |b, &n| {
+                b.iter(|| {
+                    let mut bank = BitPlaneBank::new(1, n, 100);
+                    for i in 0..64 {
+                        bank.increment(0, i);
+                    }
+                    black_box(&bank);
+                });
+            }
+        );
+
+        // Masked increment (parallel)
+        group.bench_with_input(
+            BenchmarkId::new("masked_64_increments", n_features),
+            &n_features,
+            |b, &n| {
+                b.iter(|| {
+                    let mut bank = BitPlaneBank::new(1, n, 100);
+                    bank.increment_masked(0, 0, u64::MAX);
+                    black_box(&bank);
+                });
+            }
+        );
+    }
+
+    group.finish();
+}
+
+fn bench_train_sample_bitmap(c: &mut Criterion) {
+    let mut group = c.benchmark_group("train_sample_bitmap");
+
+    for n_clauses in [50, 100, 200] {
+        let n_features = 64;
+        let x: Vec<u8> = (0..n_features).map(|i| (i % 2) as u8).collect();
+
+        // ClauseBank with bitmap-based train_sample
+        group.bench_with_input(
+            BenchmarkId::new("train_sample", n_clauses),
+            &n_clauses,
+            |b, &n| {
+                b.iter(|| {
+                    let mut bank = ClauseBank::new(n, n_features, 100);
+                    let mut rng = rng_from_seed(42);
+                    bank.train_sample(black_box(&x), 1, 10.0, 3.9, &mut rng);
+                    black_box(&bank);
+                });
+            }
+        );
+    }
+
+    group.finish();
+}
+
+fn bench_evaluate_all_bitmap(c: &mut Criterion) {
+    let mut group = c.benchmark_group("evaluate_all_bitmap");
+
+    for n_clauses in [50, 100, 200] {
+        let n_features = 64;
+        let x: Vec<u8> = (0..n_features).map(|i| (i % 2) as u8).collect();
+
+        // evaluate_all with bitmap (new)
+        group.bench_with_input(
+            BenchmarkId::new("evaluate_all", n_clauses),
+            &n_clauses,
+            |b, &n| {
+                b.iter(|| {
+                    let mut bank = ClauseBank::new(n, n_features, 100);
+                    black_box(bank.evaluate_all(black_box(&x)));
+                });
+            }
+        );
+
+        // sum_votes_tracked (baseline)
+        group.bench_with_input(
+            BenchmarkId::new("sum_votes_tracked", n_clauses),
+            &n_clauses,
+            |b, &n| {
+                b.iter(|| {
+                    let mut bank = ClauseBank::new(n, n_features, 100);
+                    black_box(bank.sum_votes_tracked(black_box(&x)));
+                });
+            }
+        );
+    }
+
+    group.finish();
+}
+
+#[cfg(feature = "parallel")]
+fn bench_parallel_training(c: &mut Criterion) {
+    use tsetlin_rs::ParallelBatch;
+
+    let mut group = c.benchmark_group("parallel_vs_sequential");
+
+    for n_samples in [100, 500, 1000] {
+        let n_clauses = 100;
+        let n_features = 64;
+
+        let x: Vec<Vec<u8>> = (0..n_samples)
+            .map(|i| (0..n_features).map(|j| ((i + j) % 2) as u8).collect())
+            .collect();
+        let y: Vec<u8> = (0..n_samples).map(|i| (i % 2) as u8).collect();
+
+        // Sequential training (1 epoch)
+        group.bench_with_input(
+            BenchmarkId::new("sequential", n_samples),
+            &n_samples,
+            |b, _| {
+                b.iter(|| {
+                    let config = Config::builder()
+                        .clauses(n_clauses)
+                        .features(n_features)
+                        .build()
+                        .unwrap();
+                    let mut tm = TsetlinMachine::new(config, 15);
+                    tm.fit(black_box(&x), black_box(&y), 1, 42);
+                });
+            }
+        );
+
+        // Parallel v1 training (sequential feedback)
+        group.bench_with_input(
+            BenchmarkId::new("parallel_v1", n_samples),
+            &n_samples,
+            |b, _| {
+                b.iter(|| {
+                    let mut bank = ClauseBank::new(n_clauses, n_features, 100);
+                    let batch = ParallelBatch::new(black_box(&x), black_box(&y));
+                    bank.train_parallel(&batch, 15.0, 3.9, 42);
+                });
+            }
+        );
+
+        // Parallel v2 training (fully parallel feedback)
+        group.bench_with_input(
+            BenchmarkId::new("parallel_v2", n_samples),
+            &n_samples,
+            |b, _| {
+                b.iter(|| {
+                    let mut bank = ClauseBank::new(n_clauses, n_features, 100);
+                    let batch = ParallelBatch::new(black_box(&x), black_box(&y));
+                    bank.train_parallel_v2(&batch, 15.0, 3.9, 42);
+                });
+            }
+        );
+    }
+
+    group.finish();
+}
+
+#[cfg(feature = "parallel")]
 criterion_group!(
     benches,
     bench_clause_evaluate,
@@ -200,6 +490,33 @@ criterion_group!(
     bench_feedback,
     bench_rule_extraction,
     bench_small_clause,
-    bench_bitwise
+    bench_bitwise,
+    bench_aos_vs_soa,
+    bench_bitplane_evaluate,
+    bench_bitplane_feedback,
+    bench_bitplane_increment,
+    bench_train_sample_bitmap,
+    bench_evaluate_all_bitmap,
+    bench_parallel_training
 );
+
+#[cfg(not(feature = "parallel"))]
+criterion_group!(
+    benches,
+    bench_clause_evaluate,
+    bench_predict,
+    bench_train_epoch,
+    bench_multiclass_predict,
+    bench_feedback,
+    bench_rule_extraction,
+    bench_small_clause,
+    bench_bitwise,
+    bench_aos_vs_soa,
+    bench_bitplane_evaluate,
+    bench_bitplane_feedback,
+    bench_bitplane_increment,
+    bench_train_sample_bitmap,
+    bench_evaluate_all_bitmap
+);
+
 criterion_main!(benches);

@@ -26,6 +26,7 @@
 //! - **Adaptive Threshold** - Dynamic T adjustment during training
 //! - **Clause Pruning** - Automatic reset of dead/ineffective clauses
 //! - **Const Generics** - Zero-allocation stack types with loop unrolling
+//! - **Lock-Free Parallel Training** - Async local voting tallies (ICML 2021)
 //!
 //! # Feature Flags
 //!
@@ -57,8 +58,10 @@ extern crate alloc;
 
 mod automaton;
 mod binary;
+mod bitplane;
 mod bitwise;
 mod clause;
+mod clause_bank;
 mod config;
 mod convolutional;
 pub mod error;
@@ -74,18 +77,25 @@ pub mod utils;
 #[cfg(feature = "parallel")]
 pub mod parallel;
 
+#[cfg(feature = "parallel")]
+pub mod parallel_training;
+
 #[cfg(feature = "simd")]
 pub mod simd;
 
 pub use automaton::Automaton;
 pub use binary::{AdvancedOptions, TsetlinMachine};
+pub use bitplane::BitPlaneBank;
 pub use bitwise::{BitwiseClause, pack_batch, pack_input};
 pub use clause::Clause;
+pub use clause_bank::ClauseBank;
 pub use config::{Config, ConfigBuilder};
 pub use convolutional::{ConvConfig, Convolutional};
 pub use error::{Error, Result};
 pub use model::{TsetlinModel, VotingModel};
 pub use multiclass::MultiClass;
+#[cfg(feature = "parallel")]
+pub use parallel_training::{LocalTally, ParallelBatch};
 pub use regression::Regressor;
 pub use rule::Rule;
 pub use small::{

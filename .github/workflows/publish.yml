@@ -1,0 +1,35 @@
+name: Publish
+
+on:
+  workflow_call:
+    inputs:
+      enabled:
+        type: boolean
+        required: true
+    secrets:
+      CRATESIO:
+        required: false
+
+jobs:
+  publish:
+    if: inputs.enabled
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ubuntu-latest-stable
+          save-if: false
+      - env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATESIO }}
+        run: |
+          VERSION=$(grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)"/\1/')
+          echo "Local version: $VERSION"
+          PUBLISHED=$(curl -s "https://crates.io/api/v1/crates/tsetlin-rs" | jq -r ".versions[]?.num // empty" | grep -x "$VERSION" || true)
+          if [ -n "$PUBLISHED" ]; then
+            echo "Version $VERSION already published, skipping"
+          else
+            echo "Publishing $VERSION..."
+            cargo publish || echo "Publish failed or version already exists"
+          fi
