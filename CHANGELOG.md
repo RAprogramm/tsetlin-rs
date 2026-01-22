@@ -10,6 +10,9 @@
 - [`79905a5`](https://github.com/RAprogramm/tsetlin-rs/commit/79905a55a0837fa99963d7166d2697fc73e4bd01) 16 ([#20](https://github.com/RAprogramm/tsetlin-rs/issues/20))
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
 
+- [`888b56e`](https://github.com/RAprogramm/tsetlin-rs/commit/888b56ee669dbfcdf571bec7ed37ebbe7b77fcbc) 17 ([#21](https://github.com/RAprogramm/tsetlin-rs/issues/21))
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
 ## v0.2.1
 
 - [`de68679`](https://github.com/RAprogramm/tsetlin-rs/commit/de686793d262a5f94cf23ca78bdfaa3d59a9d1e7) 15 ([#19](https://github.com/RAprogramm/tsetlin-rs/issues/19))
