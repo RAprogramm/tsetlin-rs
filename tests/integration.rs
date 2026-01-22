@@ -369,3 +369,39 @@ fn parity_pattern_challenging() {
     let acc = tm.evaluate(&x_train, &y_train);
     assert!(acc >= 0.4, "Parity is hard but should be above random");
 }
+
+// ==================== Error Display Tests ====================
+
+#[test]
+fn error_display_messages() {
+    use tsetlin_rs::Error;
+
+    assert_eq!(Error::MissingClauses.to_string(), "n_clauses is required");
+    assert_eq!(Error::MissingFeatures.to_string(), "n_features is required");
+    assert_eq!(Error::OddClauses.to_string(), "n_clauses must be even");
+    assert_eq!(Error::InvalidSpecificity.to_string(), "s must be > 1.0");
+    assert_eq!(Error::InvalidThreshold.to_string(), "threshold must be > 0");
+    assert_eq!(Error::EmptyDataset.to_string(), "dataset cannot be empty");
+    assert_eq!(
+        Error::DimensionMismatch {
+            expected: 10,
+            got:      5
+        }
+        .to_string(),
+        "dimension mismatch: expected 10, got 5"
+    );
+}
+
+// ==================== Batch Prediction Tests ====================
+
+#[test]
+fn predict_batch_returns_correct_length() {
+    let config = Config::builder().clauses(20).features(2).build().unwrap();
+    let mut tm = TsetlinMachine::new(config, 10);
+
+    let (x, y) = xor_data();
+    tm.fit(&x, &y, 200, 42);
+
+    let predictions = tm.predict_batch(&x);
+    assert_eq!(predictions.len(), x.len());
+}

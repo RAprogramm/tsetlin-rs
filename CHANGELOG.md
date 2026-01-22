@@ -4,6 +4,21 @@
 
 ## Unreleased
 
+- [`fd22202`](https://github.com/RAprogramm/tsetlin-rs/commit/fd22202cc36dd8a33d0d3e9370b536b59a006289) [#3](https://github.com/RAprogramm/tsetlin-rs/issues/3) 🔧 ci: add JUnit XML test results for Codecov Test Analytics
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`61beeff`](https://github.com/RAprogramm/tsetlin-rs/commit/61beeff696ffb68271e13e2cebbc9ae91a688b1c) [#3](https://github.com/RAprogramm/tsetlin-rs/issues/3) ✨ feat: optimize ClauseBank evaluation and add benchmarks
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`d9bdd34`](https://github.com/RAprogramm/tsetlin-rs/commit/d9bdd347f470ec67be2226092cdeafa9854f2416) [#3](https://github.com/RAprogramm/tsetlin-rs/issues/3) ✨ feat: add ClauseBank SoA storage for cache-efficient operations
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`8742f6f`](https://github.com/RAprogramm/tsetlin-rs/commit/8742f6f8e84fa615c8e072f90d7baec060325226) [#3](https://github.com/RAprogramm/tsetlin-rs/issues/3) 🔨 chore: start SoA layout implementation
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`a3039dc`](https://github.com/RAprogramm/tsetlin-rs/commit/a3039dc99abf35f8ee132edee3b538cf47ffeb4b) 🐛 fix: releases
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
 - [`a7bfeda`](https://github.com/RAprogramm/tsetlin-rs/commit/a7bfeda325c6aea4e26487e89a7d2ef4cb85f24b) 🔧 ci: auto-create GitHub release when version is in changelog
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
 
@@ -15,6 +30,8 @@
 
 - [`bcd0c93`](https://github.com/RAprogramm/tsetlin-rs/commit/bcd0c9309faffda8940e9d21ccfe98c02144a417) 🐛 fix: changelog generation logic and restructure CHANGELOG.md
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+## v0.1.0
 
 - [`75dfee6`](https://github.com/RAprogramm/tsetlin-rs/commit/75dfee6ab498600051583023098ded8fa64595e6) 🐛 fix: improve crates.io version check and add REUSE badge
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
@@ -142,8 +159,5 @@
 - [`a0fafa4`](https://github.com/RAprogramm/tsetlin-rs/commit/a0fafa4b7d7d08dc5faa7eafdcece2d584c8764a) Initial commit: Tsetlin Machine Rust implementation
   <img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%"/> [**RAprogramm**](https://github.com/RAprogramm)
 
-## v0.1.0
-
 - [`e73c2cd`](https://github.com/RAprogramm/tsetlin-rs/commit/e73c2cda7debd1d5dfd03c483d3450cb5e009df3) Create SECURITY.md
   <img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%"/> [**RAprogramm**](https://github.com/RAprogramm)
-
