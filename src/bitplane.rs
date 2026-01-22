@@ -444,6 +444,7 @@ impl BitPlaneBank {
     ///
     /// Uses parallel bit-plane operations to update 64 automata simultaneously.
     /// Probability decisions are made per-automaton, then batched into masks.
+    /// Uses integer threshold comparison for ~2x faster RNG checks.
     pub fn type_i<R: rand::Rng>(
         &mut self,
         clause: usize,
@@ -452,17 +453,19 @@ impl BitPlaneBank {
         s: f32,
         rng: &mut R
     ) {
+        use crate::config::prob_to_threshold;
+
         let n = x.len().min(self.n_features);
+        let threshold_weaken = prob_to_threshold(1.0 / s);
 
         if !fires {
             // Weaken all automata with probability 1/s
-            self.weaken_all(clause, n, s, rng);
+            self.weaken_all(clause, n, threshold_weaken, rng);
             return;
         }
 
         // Firing clause: reinforce matching pattern
-        let prob_strengthen = (s - 1.0) / s;
-        let prob_weaken = 1.0 / s;
+        let threshold_strengthen = prob_to_threshold((s - 1.0) / s);
 
         // Process full chunks (32 features = 64 automata per chunk)
         let full_chunks = n / 32;
@@ -479,18 +482,18 @@ impl BitPlaneBank {
 
                 if xk == 1 {
                     // Strengthen include, weaken negated
-                    if rng.random::<f32>() <= prob_strengthen {
+                    if rng.random::<u32>() < threshold_strengthen {
                         inc_mask |= 1u64 << pos_include;
                     }
-                    if rng.random::<f32>() <= prob_weaken {
+                    if rng.random::<u32>() < threshold_weaken {
                         dec_mask |= 1u64 << pos_negated;
                     }
                 } else {
                     // Strengthen negated, weaken include
-                    if rng.random::<f32>() <= prob_strengthen {
+                    if rng.random::<u32>() < threshold_strengthen {
                         inc_mask |= 1u64 << pos_negated;
                     }
-                    if rng.random::<f32>() <= prob_weaken {
+                    if rng.random::<u32>() < threshold_weaken {
                         dec_mask |= 1u64 << pos_include;
                     }
                 }
@@ -507,33 +510,38 @@ impl BitPlaneBank {
             let automaton_negated = 2 * k + 1;
 
             if xk == 1 {
-                if rng.random::<f32>() <= prob_strengthen {
+                if rng.random::<u32>() < threshold_strengthen {
                     self.increment(clause, automaton_include);
                 }
-                if rng.random::<f32>() <= prob_weaken {
+                if rng.random::<u32>() < threshold_weaken {
                     self.decrement(clause, automaton_negated);
                 }
             } else {
-                if rng.random::<f32>() <= prob_strengthen {
+                if rng.random::<u32>() < threshold_strengthen {
                     self.increment(clause, automaton_negated);
                 }
-                if rng.random::<f32>() <= prob_weaken {
+                if rng.random::<u32>() < threshold_weaken {
                     self.decrement(clause, automaton_include);
                 }
             }
         }
     }
 
-    /// Weakens all automata in a clause with probability 1/s.
-    fn weaken_all<R: rand::Rng>(&mut self, clause: usize, n_features: usize, s: f32, rng: &mut R) {
-        let prob_weaken = 1.0 / s;
+    /// Weakens all automata in a clause with probability threshold.
+    fn weaken_all<R: rand::Rng>(
+        &mut self,
+        clause: usize,
+        n_features: usize,
+        threshold: u32,
+        rng: &mut R
+    ) {
         let n_automata = 2 * n_features;
         let full_chunks = n_automata / CHUNK_SIZE;
 
         for chunk in 0..full_chunks {
             let mut dec_mask = 0u64;
             for bit in 0..CHUNK_SIZE {
-                if rng.random::<f32>() <= prob_weaken {
+                if rng.random::<u32>() < threshold {
                     dec_mask |= 1u64 << bit;
                 }
             }
@@ -543,7 +551,7 @@ impl BitPlaneBank {
         // Remaining automata
         let start = full_chunks * CHUNK_SIZE;
         for automaton in start..n_automata {
-            if rng.random::<f32>() <= prob_weaken {
+            if rng.random::<u32>() < threshold {
                 self.decrement(clause, automaton);
             }
         }
@@ -605,6 +613,7 @@ impl BitPlaneBank {
     ///
     /// When firing, always strengthens matching literals (probability 1.0).
     /// Weakening still uses probability 1/s.
+    /// Uses integer threshold comparison for ~2x faster RNG checks.
     ///
     /// # Arguments
     ///
@@ -621,14 +630,16 @@ impl BitPlaneBank {
         s: f32,
         rng: &mut R
     ) {
+        use crate::config::prob_to_threshold;
+
         let n = x.len().min(self.n_features);
+        let threshold_weaken = prob_to_threshold(1.0 / s);
 
         if !fires {
-            self.weaken_all(clause, n, s, rng);
+            self.weaken_all(clause, n, threshold_weaken, rng);
             return;
         }
 
-        let prob_weaken = 1.0 / s;
         let full_chunks = n / 32;
 
         for chunk in 0..full_chunks {
@@ -645,10 +656,10 @@ impl BitPlaneBank {
             for k in 0..32 {
                 let xk = x[x_offset + k];
                 if xk == 1 {
-                    if rng.random::<f32>() <= prob_weaken {
+                    if rng.random::<u32>() < threshold_weaken {
                         dec_mask |= 1u64 << (2 * k + 1); // negated
                     }
-                } else if rng.random::<f32>() <= prob_weaken {
+                } else if rng.random::<u32>() < threshold_weaken {
                     dec_mask |= 1u64 << (2 * k); // include
                 }
             }
@@ -665,12 +676,12 @@ impl BitPlaneBank {
 
             if xk == 1 {
                 self.increment(clause, automaton_include);
-                if rng.random::<f32>() <= prob_weaken {
+                if rng.random::<u32>() < threshold_weaken {
                     self.decrement(clause, automaton_negated);
                 }
             } else {
                 self.increment(clause, automaton_negated);
-                if rng.random::<f32>() <= prob_weaken {
+                if rng.random::<u32>() < threshold_weaken {
                     self.decrement(clause, automaton_include);
                 }
             }

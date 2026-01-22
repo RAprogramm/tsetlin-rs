@@ -26,6 +26,7 @@
 use rand::Rng;
 
 use super::ClauseBank;
+use crate::config::prob_to_threshold;
 
 impl ClauseBank {
     /// Applies Type I feedback to reinforce patterns for the target class.
@@ -73,9 +74,11 @@ impl ClauseBank {
     /// // Reinforce pattern [1, 0, 1, 0] for clause 0
     /// bank.type_i(0, &[1, 0, 1, 0], true, 3.9, &mut rng);
     /// ```
+    ///
+    /// Uses integer threshold comparison for ~2x faster RNG checks.
     pub fn type_i<R: Rng>(&mut self, clause: usize, x: &[u8], fires: bool, s: f32, rng: &mut R) {
-        let prob_str = (s - 1.0) / s;
-        let prob_wk = 1.0 / s;
+        let threshold_str = prob_to_threshold((s - 1.0) / s);
+        let threshold_wk = prob_to_threshold(1.0 / s);
         let n = x.len().min(self.n_features);
         let base = clause * self.stride;
         let max = 2 * self.n_states;
@@ -83,7 +86,7 @@ impl ClauseBank {
         if !fires {
             // Clause didn't fire: weaken all automata toward exclusion
             for i in 0..self.stride {
-                if rng.random::<f32>() <= prob_wk && self.states[base + i] > 1 {
+                if rng.random::<u32>() < threshold_wk && self.states[base + i] > 1 {
                     self.states[base + i] -= 1;
                 }
             }
@@ -97,18 +100,18 @@ impl ClauseBank {
 
             if xk == 1 {
                 // x[k] = 1: strengthen x_k, weaken ¬x_k
-                if rng.random::<f32>() <= prob_str && self.states[pos] < max {
+                if rng.random::<u32>() < threshold_str && self.states[pos] < max {
                     self.states[pos] += 1;
                 }
-                if rng.random::<f32>() <= prob_wk && self.states[neg] > 1 {
+                if rng.random::<u32>() < threshold_wk && self.states[neg] > 1 {
                     self.states[neg] -= 1;
                 }
             } else {
                 // x[k] = 0: strengthen ¬x_k, weaken x_k
-                if rng.random::<f32>() <= prob_str && self.states[neg] < max {
+                if rng.random::<u32>() < threshold_str && self.states[neg] < max {
                     self.states[neg] += 1;
                 }
-                if rng.random::<f32>() <= prob_wk && self.states[pos] > 1 {
+                if rng.random::<u32>() < threshold_wk && self.states[pos] > 1 {
                     self.states[pos] -= 1;
                 }
             }

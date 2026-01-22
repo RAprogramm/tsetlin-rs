@@ -4,6 +4,18 @@
 
 ## Unreleased
 
+- [`ea1990a`](https://github.com/RAprogramm/tsetlin-rs/commit/ea1990a4e7071dcab46e418eaf9f203505642c49) [#15](https://github.com/RAprogramm/tsetlin-rs/issues/15) 🐛 fix: enable codecov comments for all PRs
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`b29dd24`](https://github.com/RAprogramm/tsetlin-rs/commit/b29dd24b9d3b10d7c2885d8a13d0c58f3d4d62b5) [#15](https://github.com/RAprogramm/tsetlin-rs/issues/15) 📚 docs: redesign glossary with A-Z order and categories
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`e2f02d5`](https://github.com/RAprogramm/tsetlin-rs/commit/e2f02d5f775f727a857b107d4ade9d523d3026bc) [#15](https://github.com/RAprogramm/tsetlin-rs/issues/15) ✨ feat: integer-based probability comparison for faster RNG
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`26b5b8a`](https://github.com/RAprogramm/tsetlin-rs/commit/26b5b8aa2279b312f86f4a862623a2e445203712) 14 ([#18](https://github.com/RAprogramm/tsetlin-rs/issues/18))
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
 - [`e68d2ec`](https://github.com/RAprogramm/tsetlin-rs/commit/e68d2ece572231416d6bca54c70153eaa5f967aa) 📚 docs: add BitPlaneBank to README
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
 

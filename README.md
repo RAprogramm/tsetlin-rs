@@ -16,7 +16,38 @@
 
 A professional Rust implementation of the Tsetlin Machine algorithm for interpretable machine learning.
 
----
+<details>
+<summary><strong>Terms & Abbreviations</strong></summary>
+
+<br/>
+
+| Term | Definition | Category |
+|:-----|:-----------|:--------:|
+| **AoS** | Array of Structures — traditional object layout | `opt` |
+| **Bit-plane** | Transposed bit representation for parallel operations | `opt` |
+| **Clause** | Conjunction (AND) of literals; votes for/against a class | `core` |
+| **CoTM** | Coalesced Tsetlin Machine | `abbr` |
+| **CTM** | Convolutional Tsetlin Machine | `abbr` |
+| **FPGA** | Field-Programmable Gate Array | `abbr` |
+| **Literal** | Boolean variable (`x_k`) or its negation (`¬x_k`) | `core` |
+| **MSB** | Most Significant Bit — encodes automaton action | `opt` |
+| **Polarity** | Clause vote direction: +1 or −1 | `core` |
+| **Ripple-carry** | Bit-level addition/subtraction algorithm | `opt` |
+| **RNG** | Random Number Generator | `abbr` |
+| **SIMD** | Single Instruction Multiple Data | `abbr` |
+| **SoA** | Structure of Arrays — cache-friendly layout | `opt` |
+| **Specificity (s)** | Controls pattern generality; higher = fewer literals | `train` |
+| **TA** | Tsetlin Automaton | `abbr` |
+| **Threshold (T)** | Controls feedback probability | `train` |
+| **TM** | Tsetlin Machine | `abbr` |
+| **Tsetlin Automaton** | FSM that learns include/exclude via reinforcement | `core` |
+| **Tsetlin Machine** | ML algorithm using propositional logic | `core` |
+| **Type I Feedback** | Reinforces patterns for target class | `train` |
+| **Type II Feedback** | Blocks false positives with contradicting literals | `train` |
+
+<sub>`core` — fundamentals · `train` — training · `opt` — optimization · `abbr` — abbreviation</sub>
+
+</details>
 
 ## Table of Contents
 
@@ -29,7 +60,6 @@ A professional Rust implementation of the Tsetlin Machine algorithm for interpre
 - [Feature Flags](#feature-flags)
 - [API Overview](#api-overview)
 - [Algorithm Details](#algorithm-details)
-- [Glossary](#glossary)
 - [Coverage](#coverage)
 - [In Memory of Michael Tsetlin](#in-memory-of-michael-tsetlin)
 - [Based On](#based-on)
@@ -679,71 +709,6 @@ negated: [u64; 2]  // 16 bytes
 
 <div align="right"><a href="#top">Back to top</a></div>
 
----
-
-## Glossary
-
-<details>
-<summary><strong>Terms & Abbreviations</strong></summary>
-
-<br/>
-
-<details>
-<summary><b>Core Concepts</b></summary>
-
-| Term | Definition |
-|------|------------|
-| **Tsetlin Machine (TM)** | Machine learning algorithm using propositional logic for classification/regression |
-| **Tsetlin Automaton (TA)** | Finite state machine that learns include/exclude actions via reinforcement |
-| **Clause** | Conjunction (AND) of literals; votes for/against a class |
-| **Literal** | Boolean variable (`x_k`) or its negation (`NOT x_k`) |
-| **Polarity** | Clause vote direction: +1 (positive) or -1 (negative) |
-
-</details>
-
-<details>
-<summary><b>Training</b></summary>
-
-| Term | Definition |
-|------|------------|
-| **Type I Feedback** | Reinforces patterns when sample belongs to target class |
-| **Type II Feedback** | Blocks false positives by adding contradicting literals |
-| **Threshold (T)** | Controls probability of applying feedback |
-| **Specificity (s)** | Controls pattern generality; higher = fewer literals |
-
-</details>
-
-<details>
-<summary><b>Optimization</b></summary>
-
-| Term | Definition |
-|------|------------|
-| **SoA** | Structure of Arrays — cache-friendly memory layout |
-| **AoS** | Array of Structures — traditional object layout |
-| **Bit-plane** | Transposed bit representation for parallel operations |
-| **MSB** | Most Significant Bit — encodes automaton action |
-| **Ripple-carry** | Bit-level addition/subtraction algorithm |
-
-</details>
-
-<details>
-<summary><b>Abbreviations</b></summary>
-
-| Abbr | Full Form |
-|------|-----------|
-| **TM** | Tsetlin Machine |
-| **TA** | Tsetlin Automaton |
-| **CoTM** | Coalesced Tsetlin Machine |
-| **CTM** | Convolutional Tsetlin Machine |
-| **SIMD** | Single Instruction Multiple Data |
-| **RNG** | Random Number Generator |
-| **FPGA** | Field-Programmable Gate Array |
-
-</details>
-
-</details>
-
-<div align="right"><a href="#top">Back to top</a></div>
 
 ---
 

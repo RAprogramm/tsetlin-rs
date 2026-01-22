@@ -2,7 +2,7 @@
 
 use rand::Rng;
 
-use crate::Clause;
+use crate::{Clause, config::prob_to_threshold};
 
 /// # Overview
 ///
@@ -10,15 +10,17 @@ use crate::Clause;
 ///
 /// When clause fires: strengthen matching, weaken non-matching.
 /// When clause doesn't fire: weaken all toward exclusion.
+///
+/// Uses integer threshold comparison for ~2x faster RNG checks.
 pub fn type_i<R: Rng>(clause: &mut Clause, x: &[u8], fires: bool, s: f32, rng: &mut R) {
-    let prob_strengthen = (s - 1.0) / s;
-    let prob_weaken = 1.0 / s;
+    let threshold_strengthen = prob_to_threshold((s - 1.0) / s);
+    let threshold_weaken = prob_to_threshold(1.0 / s);
     let automata = clause.automata_mut();
     let n = x.len();
 
     if !fires {
         for a in automata.iter_mut() {
-            if rng.random::<f32>() <= prob_weaken {
+            if rng.random::<u32>() < threshold_weaken {
                 a.decrement();
             }
         }
@@ -27,17 +29,17 @@ pub fn type_i<R: Rng>(clause: &mut Clause, x: &[u8], fires: bool, s: f32, rng: &
 
     for k in 0..n {
         if x[k] == 1 {
-            if rng.random::<f32>() <= prob_strengthen {
+            if rng.random::<u32>() < threshold_strengthen {
                 automata[2 * k].increment();
             }
-            if rng.random::<f32>() <= prob_weaken {
+            if rng.random::<u32>() < threshold_weaken {
                 automata[2 * k + 1].decrement();
             }
         } else {
-            if rng.random::<f32>() <= prob_strengthen {
+            if rng.random::<u32>() < threshold_strengthen {
                 automata[2 * k + 1].increment();
             }
-            if rng.random::<f32>() <= prob_weaken {
+            if rng.random::<u32>() < threshold_weaken {
                 automata[2 * k].decrement();
             }
         }
@@ -66,24 +68,26 @@ pub fn type_ii(clause: &mut Clause, x: &[u8]) {
 /// # Overview
 ///
 /// Boosted Type I (Type Ia): always strengthens matching when firing.
+///
+/// Uses integer threshold comparison for ~2x faster RNG checks.
 pub fn type_ia<R: Rng>(clause: &mut Clause, x: &[u8], fires: bool, s: f32, rng: &mut R) {
     if !fires {
         type_i(clause, x, fires, s, rng);
         return;
     }
 
-    let prob_weaken = 1.0 / s;
+    let threshold_weaken = prob_to_threshold(1.0 / s);
     let automata = clause.automata_mut();
 
     for (k, &xk) in x.iter().enumerate() {
         if xk == 1 {
             automata[2 * k].increment();
-            if rng.random::<f32>() <= prob_weaken {
+            if rng.random::<u32>() < threshold_weaken {
                 automata[2 * k + 1].decrement();
             }
         } else {
             automata[2 * k + 1].increment();
-            if rng.random::<f32>() <= prob_weaken {
+            if rng.random::<u32>() < threshold_weaken {
                 automata[2 * k].decrement();
             }
         }
