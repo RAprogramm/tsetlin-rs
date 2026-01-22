@@ -426,48 +426,60 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Check and create release
+      - name: Create releases for all versions in CHANGELOG
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Get version from Cargo.toml
-          VERSION=$(grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)"/\1/')
-          TAG="v$VERSION"
-          echo "Version: $VERSION, Tag: $TAG"
+          # Extract all versions from CHANGELOG (## vX.Y.Z)
+          VERSIONS=$(grep -oP '^## \Kv[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md | tac)
 
-          # Check if version section exists in CHANGELOG
-          if ! grep -q "## $TAG" CHANGELOG.md; then
-            echo "Version $TAG not found in CHANGELOG.md, skipping release"
+          if [ -z "$VERSIONS" ]; then
+            echo "No versions found in CHANGELOG.md"
             exit 0
           fi
 
-          # Check if release already exists
-          if gh release view "$TAG" &>/dev/null; then
-            echo "Release $TAG already exists, skipping"
-            exit 0
+          echo "Found versions in CHANGELOG: $(echo $VERSIONS | tr '\n' ' ')"
+
+          # Process each version (oldest first due to tac)
+          for TAG in $VERSIONS; do
+            echo "----------------------------------------"
+            echo "Processing $TAG..."
+
+            # Check if release already exists
+            if gh release view "$TAG" &>/dev/null; then
+              echo "Release $TAG already exists, skipping"
+              continue
+            fi
+
+            # Extract release notes from CHANGELOG
+            NOTES=$(awk -v tag="$TAG" '
+              $0 ~ "^## " tag "$" { found=1; next }
+              found && /^## v[0-9]/ { exit }
+              found { print }
+            ' CHANGELOG.md)
+
+            if [ -z "$NOTES" ]; then
+              NOTES="Release $TAG"
+            fi
+
+            echo "Creating release $TAG..."
+            echo "$NOTES" | gh release create "$TAG" \
+              --title "$TAG" \
+              --notes-file - \
+              --target main \
+              --latest=false
+
+            echo "Release $TAG created!"
+          done
+
+          # Mark the latest version as latest
+          LATEST=$(echo "$VERSIONS" | tail -1)
+          if [ -n "$LATEST" ]; then
+            echo "Marking $LATEST as latest release"
+            gh release edit "$LATEST" --latest || true
           fi
 
-          # Extract release notes from CHANGELOG (content between ## vX.Y.Z and next ## or EOF)
-          NOTES=$(awk -v tag="$TAG" '
-            $0 ~ "^## " tag "$" { found=1; next }
-            found && /^## v[0-9]/ { exit }
-            found { print }
-          ' CHANGELOG.md)
-
-          if [ -z "$NOTES" ]; then
-            NOTES="Release $TAG"
-          fi
-
-          echo "Creating release $TAG..."
-          echo "$NOTES" | gh release create "$TAG" \
-            --title "$TAG" \
-            --notes-file - \
-            --verify-tag || gh release create "$TAG" \
-            --title "$TAG" \
-            --notes-file - \
-            --target main
-
-          echo "Release $TAG created successfully!"
+          echo "All releases processed!"
 
   # ============================================================================
   # Final gate (for branch protection)
