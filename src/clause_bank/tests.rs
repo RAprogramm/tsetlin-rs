@@ -379,3 +379,178 @@ fn type_ii_firing_only_affects_matching_polarity() {
         "¬x_0 in negative clause should be incremented"
     );
 }
+
+#[test]
+fn type_i_respects_max_state() {
+    let mut bank = ClauseBank::new(1, 2, 100);
+    let mut rng = rng_from_seed(42);
+
+    // Set state to max (2 * n_states = 200)
+    bank.states[0] = 200;
+
+    // Try to increment via type_i
+    for _ in 0..100 {
+        bank.type_i(0, &[1, 0], true, 3.9, &mut rng);
+    }
+
+    // Should not exceed max
+    assert_eq!(bank.states[0], 200, "state should not exceed max");
+}
+
+#[test]
+fn type_i_respects_min_state() {
+    let mut bank = ClauseBank::new(1, 2, 100);
+    let mut rng = rng_from_seed(42);
+
+    // Set state to min (1)
+    bank.states[0] = 1;
+
+    // Try to decrement via type_i (not firing)
+    for _ in 0..100 {
+        bank.type_i(0, &[1, 0], false, 3.9, &mut rng);
+    }
+
+    // Should not go below 1
+    assert_eq!(bank.states[0], 1, "state should not go below 1");
+}
+
+#[test]
+fn type_i_fires_with_x0_strengthens_negated() {
+    let mut bank = ClauseBank::new(1, 2, 100);
+    let mut rng = rng_from_seed(42);
+
+    // Apply type_i with x[0]=0, x[1]=1
+    for _ in 0..200 {
+        bank.type_i(0, &[0, 1], true, 3.9, &mut rng);
+    }
+
+    // ¬x_0 should be strengthened (x[0]=0), x_1 should be strengthened (x[1]=1)
+    let states = bank.clause_states(0);
+    assert!(states[1] > 100, "¬x_0 should move toward include");
+    assert!(states[2] > 100, "x_1 should move toward include");
+}
+
+#[test]
+fn type_ii_skips_above_threshold() {
+    let mut bank = ClauseBank::new(1, 2, 100);
+
+    // Set states above threshold
+    bank.states[0] = 150;
+    bank.states[1] = 150;
+
+    // Apply type_ii
+    bank.type_ii(0, &[0, 1]);
+
+    // States above threshold should NOT be incremented
+    assert_eq!(bank.states[0], 150, "state above threshold unchanged");
+    assert_eq!(bank.states[1], 150, "state above threshold unchanged");
+}
+
+#[test]
+fn type_ii_respects_max_state() {
+    // Use n_states=50 so threshold=50, max=100
+    let mut bank = ClauseBank::new(1, 2, 50);
+
+    // For type_ii: state must be <= threshold AND < max
+    // Set state to 50 (= threshold), should increment to 51
+    bank.states[0] = 50;
+    bank.type_ii(0, &[0, 0]);
+    assert_eq!(bank.states[0], 51, "should increment when at threshold");
+
+    // Now set to max (100)
+    bank.states[0] = 100;
+    bank.type_ii(0, &[0, 0]);
+    assert_eq!(bank.states[0], 100, "should not exceed max");
+}
+
+#[test]
+fn train_sample_y0_applies_feedback() {
+    let mut bank = ClauseBank::new(10, 2, 100);
+    let mut rng = rng_from_seed(42);
+
+    let initial_states: Vec<i16> = bank.states.clone();
+
+    // Train with y=0 (negative class)
+    for _ in 0..100 {
+        bank.train_sample(&[1, 0], 0, 10.0, 3.9, &mut rng);
+    }
+
+    // States should have changed
+    assert_ne!(bank.states, initial_states, "states should change with y=0");
+}
+
+#[test]
+fn train_sample_y0_type_ii_for_positive_firing() {
+    let mut bank = ClauseBank::new(4, 2, 100);
+    let mut rng = rng_from_seed(42);
+
+    // All clauses fire initially (no literals included)
+    // With y=0: Type II should be applied to positive clauses that fire
+
+    // Train multiple times with y=0
+    for _ in 0..50 {
+        bank.train_sample(&[1, 0], 0, 10.0, 3.9, &mut rng);
+    }
+
+    // Positive clause 0: ¬x_0 should increase (blocking x[0]=1)
+    // Check that some blocking happened
+    assert!(
+        bank.states[1] > 100 || bank.states[2] > 100,
+        "type_ii should activate blockers for positive clauses with y=0"
+    );
+}
+
+#[test]
+fn type_ii_firing_with_positive_polarity() {
+    let mut bank = ClauseBank::new(4, 2, 100);
+    let mut rng = rng_from_seed(42);
+
+    // All clauses fire initially
+    bank.evaluate_all(&[1, 0]);
+
+    // Apply type_ii only to positive clauses (polarity = 1)
+    bank.type_ii_firing(&[1, 0], 1, u32::MAX, &mut rng);
+
+    // Positive clause 0: ¬x_0 should be incremented (x[0]=1)
+    assert!(bank.states[1] > 100, "¬x_0 in positive clause incremented");
+
+    // Negative clause 1 should be unchanged
+    let clause1_base = bank.stride;
+    assert_eq!(
+        bank.states[clause1_base + 1],
+        100,
+        "negative clause unchanged"
+    );
+}
+
+#[test]
+fn type_ii_firing_probability_check() {
+    let mut bank = ClauseBank::new(4, 2, 100);
+    let mut rng = rng_from_seed(42);
+
+    // All clauses fire
+    bank.evaluate_all(&[1, 0]);
+
+    // Apply with prob_threshold = 0 (should never apply)
+    bank.type_ii_firing(&[1, 0], 1, 0, &mut rng);
+
+    // Nothing should change
+    assert_eq!(bank.states[1], 100, "no change with prob=0");
+}
+
+#[test]
+fn type_ii_firing_skips_beyond_n_clauses() {
+    // Test edge case where bitmap has extra bits beyond n_clauses
+    let mut bank = ClauseBank::new(65, 2, 100); // 65 clauses = 2 bitmap words
+    let mut rng = rng_from_seed(42);
+
+    // Set all bits in bitmap (including invalid ones beyond 65)
+    bank.fires_bitmap[0] = u64::MAX;
+    bank.fires_bitmap[1] = u64::MAX;
+
+    // This should not panic and should only process valid clauses
+    bank.type_ii_firing(&[1, 0], 1, u32::MAX, &mut rng);
+
+    // Should have processed clause 0 (positive polarity)
+    assert!(bank.states[1] > 100, "valid clause processed");
+}
