@@ -450,15 +450,28 @@ fn bench_parallel_training(c: &mut Criterion) {
             }
         );
 
-        // Parallel training (1 epoch)
+        // Parallel v1 training (sequential feedback)
         group.bench_with_input(
-            BenchmarkId::new("parallel", n_samples),
+            BenchmarkId::new("parallel_v1", n_samples),
             &n_samples,
             |b, _| {
                 b.iter(|| {
                     let mut bank = ClauseBank::new(n_clauses, n_features, 100);
                     let batch = ParallelBatch::new(black_box(&x), black_box(&y));
                     bank.train_parallel(&batch, 15.0, 3.9, 42);
+                });
+            }
+        );
+
+        // Parallel v2 training (fully parallel feedback)
+        group.bench_with_input(
+            BenchmarkId::new("parallel_v2", n_samples),
+            &n_samples,
+            |b, _| {
+                b.iter(|| {
+                    let mut bank = ClauseBank::new(n_clauses, n_features, 100);
+                    let batch = ParallelBatch::new(black_box(&x), black_box(&y));
+                    bank.train_parallel_v2(&batch, 15.0, 3.9, 42);
                 });
             }
         );
