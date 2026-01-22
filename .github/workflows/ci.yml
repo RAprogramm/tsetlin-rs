@@ -175,6 +175,8 @@ jobs:
 
       - uses: taiki-e/install-action@cargo-llvm-cov
 
+      - uses: taiki-e/install-action@cargo-nextest
+
       - uses: Swatinem/rust-cache@v2
         with:
           prefix-key: coverage
@@ -182,9 +184,7 @@ jobs:
           cache-targets: true
 
       - name: Run tests with coverage
-        run: |
-          cargo llvm-cov --features "parallel,serde" --lcov --output-path lcov.info
-          cargo test --features "parallel,serde" -- -Z unstable-options --format json > test-results.json || true
+        run: cargo llvm-cov --features "parallel,serde" --lcov --output-path lcov.info
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -193,11 +193,33 @@ jobs:
           files: lcov.info
           fail_ci_if_error: false
 
+  test-results:
+    name: Test Results
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@cargo-nextest
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: test-results
+          shared-key: stable
+
+      - name: Run tests with JUnit output
+        run: cargo nextest run --features "parallel,serde" --profile ci
+        continue-on-error: true
+
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          files: target/nextest/ci/junit.xml
+          report-type: test_results
 
   # ============================================================================
   # STAGE 5: Changelog (every push, skip bot commits)
