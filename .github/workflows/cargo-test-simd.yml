@@ -1,0 +1,17 @@
+name: cargo test (SIMD nightly)
+
+on:
+  workflow_call:
+
+jobs:
+  test-simd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: test-simd
+          shared-key: nightly
+          cache-targets: true
+      - run: cargo +nightly test --all-features

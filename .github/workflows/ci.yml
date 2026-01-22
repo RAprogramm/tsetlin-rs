@@ -13,529 +13,91 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ============================================================================
-  # STAGE 1: Quick checks (parallel, no deps)
-  # ============================================================================
-
+  # Stage 1: Quick checks (parallel)
   fmt:
-    name: Format
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt
-      - run: cargo +nightly fmt --all -- --check
+    uses: ./.github/workflows/cargo-fmt-nightly.yml
 
   check:
-    name: Check (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: ${{ matrix.os }}
-          shared-key: stable
-
-      - run: cargo check --features "parallel,serde"
+    uses: ./.github/workflows/cargo-check.yml
 
   check-simd:
-    name: Check SIMD (nightly)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: dtolnay/rust-toolchain@nightly
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: simd
-          shared-key: nightly
-
-      - run: cargo +nightly check --all-features
+    uses: ./.github/workflows/cargo-check-simd.yml
 
   check-no-std:
-    name: Check no_std
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
+    uses: ./.github/workflows/cargo-check-no-std.yml
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: no-std
-          shared-key: stable
-
-      - run: cargo check --no-default-features
-
-  # ============================================================================
-  # STAGE 2: Linting (needs: check)
-  # ============================================================================
-
+  # Stage 2: Linting
   clippy:
-    name: Clippy
     needs: check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: clippy
-          shared-key: stable
-
-      - run: cargo clippy --all-targets --features "parallel,serde" -- -D warnings
+    uses: ./.github/workflows/cargo-clippy.yml
 
   doc:
-    name: Documentation
     needs: check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
+    uses: ./.github/workflows/cargo-doc.yml
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: doc
-          shared-key: stable
-
-      - run: cargo doc --no-deps --features "parallel,serde"
-        env:
-          RUSTDOCFLAGS: -Dwarnings
-
-  # ============================================================================
-  # STAGE 3: Testing (needs: clippy)
-  # ============================================================================
-
+  # Stage 3: Testing
   test:
-    name: Test (${{ matrix.os }}, ${{ matrix.features || 'default' }})
     needs: clippy
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        features: ["", "serde", "parallel", "parallel,serde"]
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: test-${{ matrix.os }}
-          shared-key: stable
-          cache-targets: true
-
-      - name: Run tests
-        run: cargo test --features "${{ matrix.features }}"
+    uses: ./.github/workflows/cargo-test.yml
 
   test-simd:
-    name: Test SIMD (nightly)
     needs: check-simd
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
+    uses: ./.github/workflows/cargo-test-simd.yml
 
-      - uses: dtolnay/rust-toolchain@nightly
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: test-simd
-          shared-key: nightly
-          cache-targets: true
-
-      - run: cargo +nightly test --all-features
-
-  # ============================================================================
-  # STAGE 4: Coverage (needs: test, ubuntu only)
-  # ============================================================================
-
+  # Stage 4: Coverage
   coverage:
-    name: Coverage
     needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: taiki-e/install-action@cargo-llvm-cov
-
-      - uses: taiki-e/install-action@cargo-nextest
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: coverage
-          shared-key: stable
-          cache-targets: true
-
-      - name: Run tests with coverage
-        run: cargo llvm-cov --features "parallel,serde" --lcov --output-path lcov.info
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: lcov.info
-          fail_ci_if_error: false
+    uses: ./.github/workflows/coverage.yml
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   test-results:
-    name: Test Results
     needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
+    uses: ./.github/workflows/test-results.yml
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: taiki-e/install-action@cargo-nextest
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: test-results
-          shared-key: stable
-
-      - name: Run tests with JUnit output
-        run: cargo nextest run --features "parallel,serde" --profile ci
-        continue-on-error: true
-
-      - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: target/nextest/ci/junit.xml
-          report-type: test_results
-
-  # ============================================================================
-  # STAGE 5: Changelog (every push, skip bot commits)
-  # ============================================================================
-
+  # Stage 5: Changelog
   changelog:
-    name: Changelog
-    runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'push' &&
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') &&
-      !contains(github.event.head_commit.message, 'chore: update changelog')
     needs: [test, doc]
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          ref: ${{ github.ref }}
+    uses: ./.github/workflows/changelog.yml
+    with:
+      enabled: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && !contains(github.event.head_commit.message, 'chore: update changelog') }}
 
-      - name: Generate Changelog
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const fs = require('fs');
-            const { execSync } = require('child_process');
-
-            // Version from Cargo.toml
-            const cargo = fs.readFileSync('Cargo.toml', 'utf8');
-            const versionMatch = cargo.match(/^version\s*=\s*"([^"]+)"/m);
-            const currentVersion = versionMatch ? `v${versionMatch[1]}` : 'v0.0.0';
-            console.log(`Current version: ${currentVersion}`);
-
-            // Parse existing changelog
-            let existingSHAs = new Set();
-            let existingVersions = new Set();
-            let unreleasedEntries = [];
-            let versionedSections = [];
-
-            if (fs.existsSync('CHANGELOG.md')) {
-              const existing = fs.readFileSync('CHANGELOG.md', 'utf8');
-
-              // Extract all SHAs already in changelog (7-char short SHA)
-              const shaRegex = /\[`([a-f0-9]{7})`\]/g;
-              let m;
-              while ((m = shaRegex.exec(existing)) !== null) {
-                existingSHAs.add(m[1]);
-              }
-
-              // Extract Unreleased section entries
-              const unreleasedMatch = existing.match(/## Unreleased\n\n([\s\S]*?)(?=\n## v|$)/);
-              if (unreleasedMatch && unreleasedMatch[1].trim()) {
-                unreleasedEntries = unreleasedMatch[1].trim().split('\n\n').filter(e => e.startsWith('- ['));
-              }
-
-              // Extract all versioned sections (preserve completely)
-              const versionedMatch = existing.match(/\n(## v[\d.]+[\s\S]*)/);
-              if (versionedMatch) {
-                versionedSections = versionedMatch[1].split(/(?=\n## v[\d.]+)/).filter(s => s.trim());
-              }
-
-              // Track existing versions
-              const versionRegex = /^## (v[\d.]+)/gm;
-              while ((m = versionRegex.exec(existing)) !== null) {
-                existingVersions.add(m[1]);
-              }
-            }
-
-            console.log(`Existing versions: ${[...existingVersions].join(', ') || 'none'}`);
-            console.log(`Unreleased entries: ${unreleasedEntries.length}`);
-            console.log(`Existing SHAs: ${existingSHAs.size}`);
-
-            // Get new commits not in changelog (limit to last 100)
-            const gitLog = execSync('git log -100 --pretty=format:"%H|%h|%s|%an" --no-merges', { encoding: 'utf8' });
-            const newCommits = [];
-
-            for (const line of gitLog.split('\n').filter(l => l)) {
-              const [sha, shaShort, message, author] = line.split('|');
-
-              // Skip if already documented or is changelog/merge commit
-              if (existingSHAs.has(shaShort)) continue;
-              if (message.includes('chore: update changelog')) continue;
-              if (message.includes('Merge pull request')) continue;
-
-              try {
-                const { data: commitData } = await github.rest.repos.getCommit({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  ref: sha
-                });
-
-                const ghAuthor = commitData.author;
-                const authorAvatar = ghAuthor?.avatar_url
-                  ? `[<img src="${ghAuthor.avatar_url}" width="20" height="20" style="border-radius:50%" title="${ghAuthor.login}"/>](${ghAuthor.html_url})`
-                  : `**${author}**`;
-
-                // Convert #123 to issue/PR links
-                const repoUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
-                let linkedMessage = message.replace(/#(\d+)/g, `[#$1](${repoUrl}/issues/$1)`);
-
-                // Parse conventional commit and add type badge
-                const typeMatch = linkedMessage.match(/^(\[#\d+\]\([^)]+\)\s+)?(\w+)(\([^)]+\))?:\s*(.+)$/);
-                if (typeMatch) {
-                  const [, issue = '', type, scope = '', desc] = typeMatch;
-                  const types = {
-                    feat: '✨', fix: '🐛', docs: '📚', style: '💎',
-                    refactor: '♻️', perf: '⚡', test: '🧪', build: '📦',
-                    ci: '🔧', chore: '🔨', revert: '⏪'
-                  };
-                  const emoji = types[type] || '📝';
-                  linkedMessage = `${issue}${emoji} ${type}${scope}: ${desc}`;
-                }
-
-                newCommits.push(`- [\`${shaShort}\`](${commitData.html_url}) ${linkedMessage}\n  ${authorAvatar}`);
-              } catch (e) {
-                console.log(`Skip commit ${shaShort}: ${e.message}`);
-              }
-            }
-
-            console.log(`New commits found: ${newCommits.length}`);
-
-            // Build changelog
-            let changelog = '# Changelog\n\n---\n\n';
-
-            const isNewVersion = !existingVersions.has(currentVersion);
-
-            // New commits go to current version section (not Unreleased)
-            // This ensures each version bump creates its own section
-            if (isNewVersion && newCommits.length > 0) {
-              // NEW VERSION: Create version section with new commits
-              console.log(`Creating new version section: ${currentVersion}`);
-              changelog += `## ${currentVersion}\n\n`;
-              changelog += newCommits.join('\n\n') + '\n\n';
-            }
-
-            // Keep any orphaned unreleased entries (edge case)
-            if (unreleasedEntries.length > 0 && (existingVersions.has(currentVersion) || newCommits.length === 0)) {
-              changelog += '## Unreleased\n\n';
-              changelog += unreleasedEntries.join('\n\n') + '\n\n';
-            }
-
-            // Append all existing versioned sections (NEVER modify or delete)
-            if (versionedSections.length > 0) {
-              changelog += versionedSections.join('\n');
-            }
-
-            fs.writeFileSync('CHANGELOG.md', changelog);
-            console.log(`Changelog updated. New commits: ${newCommits.length}`);
-
-      - name: Commit Changelog
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add CHANGELOG.md
-          git diff --staged --quiet || git commit -m "chore: update changelog"
-          git push
-
-  # ============================================================================
-  # STAGE 6: Publish to crates.io (main only, new version only)
-  # ============================================================================
-
+  # Stage 6: Publish
   publish:
-    name: Publish
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [test, test-simd, coverage]
-    steps:
-      - uses: actions/checkout@v6
+    uses: ./.github/workflows/publish.yml
+    with:
+      enabled: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    secrets:
+      CRATESIO: ${{ secrets.CRATESIO }}
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Check version and publish
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATESIO }}
-        run: |
-          VERSION=$(grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)"/\1/')
-          echo "Local version: $VERSION"
-
-          # Check if version exists on crates.io
-          PUBLISHED=$(curl -s "https://crates.io/api/v1/crates/tsetlin-rs" | jq -r ".versions[]?.num // empty" | grep -x "$VERSION" || true)
-
-          if [ -n "$PUBLISHED" ]; then
-            echo "Version $VERSION already published, skipping"
-          else
-            echo "Version $VERSION not found on crates.io, publishing..."
-            cargo publish || echo "Publish failed or version already exists"
-          fi
-
-  # ============================================================================
-  # STAGE 7: GitHub Release (main only, if version in changelog but no release)
-  # ============================================================================
-
+  # Stage 7: Release
   release:
-    name: Release
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [publish, changelog]
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: main
-          fetch-depth: 0
+    uses: ./.github/workflows/release.yml
+    with:
+      enabled: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
-      - name: Create releases for all versions in CHANGELOG
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # Extract all versions from CHANGELOG (## vX.Y.Z)
-          VERSIONS=$(grep -oP '^## \Kv[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md | tac)
-
-          if [ -z "$VERSIONS" ]; then
-            echo "No versions found in CHANGELOG.md"
-            exit 0
-          fi
-
-          echo "Found versions in CHANGELOG: $(echo $VERSIONS | tr '\n' ' ')"
-
-          # Process each version (oldest first due to tac)
-          for TAG in $VERSIONS; do
-            echo "----------------------------------------"
-            echo "Processing $TAG..."
-
-            # Check if release already exists
-            if gh release view "$TAG" &>/dev/null; then
-              echo "Release $TAG already exists, skipping"
-              continue
-            fi
-
-            # Extract release notes from CHANGELOG
-            NOTES=$(awk -v tag="$TAG" '
-              $0 ~ "^## " tag "$" { found=1; next }
-              found && /^## v[0-9]/ { exit }
-              found { print }
-            ' CHANGELOG.md)
-
-            if [ -z "$NOTES" ]; then
-              NOTES="Release $TAG"
-            fi
-
-            echo "Creating release $TAG..."
-            echo "$NOTES" | gh release create "$TAG" \
-              --title "$TAG" \
-              --notes-file - \
-              --target main \
-              --latest=false
-
-            echo "Release $TAG created!"
-          done
-
-          # Mark the latest version as latest
-          LATEST=$(echo "$VERSIONS" | tail -1)
-          if [ -n "$LATEST" ]; then
-            echo "Marking $LATEST as latest release"
-            gh release edit "$LATEST" --latest || true
-          fi
-
-          echo "All releases processed!"
-
-  # ============================================================================
-  # Final gate (for branch protection)
-  # ============================================================================
-
+  # Final gate
   ci-success:
-    name: CI Success
     if: always()
     needs: [fmt, check, check-simd, check-no-std, clippy, doc, test, test-simd, coverage]
     runs-on: ubuntu-latest
     steps:
-      - name: Check all jobs
-        run: |
+      - run: |
           results=("${{ needs.fmt.result }}" "${{ needs.check.result }}" \
                    "${{ needs.check-simd.result }}" "${{ needs.check-no-std.result }}" \
                    "${{ needs.clippy.result }}" "${{ needs.doc.result }}" \
                    "${{ needs.test.result }}" "${{ needs.test-simd.result }}" \
                    "${{ needs.coverage.result }}")
           for r in "${results[@]}"; do
-            if [[ "$r" != "success" ]]; then
-              echo "CI failed"
-              exit 1
-            fi
+            [[ "$r" != "success" ]] && exit 1
           done
-          echo "All CI checks passed!"
 
-  # ============================================================================
-  # Cleanup: Delete cancelled workflow runs
-  # ============================================================================
-
+  # Cleanup
   cleanup:
-    name: Cleanup Cancelled Runs
     if: always()
-    needs: [ci-success]
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-    steps:
-      - name: Delete cancelled workflow runs
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # Get cancelled runs for this workflow on this branch
-          CANCELLED=$(gh api \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/${{ github.repository }}/actions/runs?branch=${{ github.ref_name }}&status=cancelled&per_page=100" \
-            --jq '.workflow_runs[] | select(.name == "${{ github.workflow }}") | .id')
-
-          if [ -z "$CANCELLED" ]; then
-            echo "No cancelled runs to delete"
-            exit 0
-          fi
-
-          echo "Deleting cancelled runs..."
-          for run_id in $CANCELLED; do
-            echo "Deleting run $run_id"
-            gh api -X DELETE "/repos/${{ github.repository }}/actions/runs/$run_id" || true
-          done
-          echo "Cleanup complete"
+    needs: ci-success
+    uses: ./.github/workflows/cleanup.yml

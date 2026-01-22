@@ -1,0 +1,16 @@
+name: cargo check (no_std)
+
+on:
+  workflow_call:
+
+jobs:
+  check-no-std:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: no-std
+          shared-key: stable
+      - run: cargo check --no-default-features

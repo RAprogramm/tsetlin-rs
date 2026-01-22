@@ -1,0 +1,16 @@
+name: cargo check (SIMD nightly)
+
+on:
+  workflow_call:
+
+jobs:
+  check-simd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: simd
+          shared-key: nightly
+      - run: cargo +nightly check --all-features
