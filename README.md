@@ -16,7 +16,38 @@
 
 A professional Rust implementation of the Tsetlin Machine algorithm for interpretable machine learning.
 
----
+<details>
+<summary><strong>Terms & Abbreviations</strong></summary>
+
+<br/>
+
+| Term | Definition | Category |
+|:-----|:-----------|:--------:|
+| **AoS** | Array of Structures — traditional object layout | `opt` |
+| **Bit-plane** | Transposed bit representation for parallel operations | `opt` |
+| **Clause** | Conjunction (AND) of literals; votes for/against a class | `core` |
+| **CoTM** | Coalesced Tsetlin Machine | `abbr` |
+| **CTM** | Convolutional Tsetlin Machine | `abbr` |
+| **FPGA** | Field-Programmable Gate Array | `abbr` |
+| **Literal** | Boolean variable (`x_k`) or its negation (`¬x_k`) | `core` |
+| **MSB** | Most Significant Bit — encodes automaton action | `opt` |
+| **Polarity** | Clause vote direction: +1 or −1 | `core` |
+| **Ripple-carry** | Bit-level addition/subtraction algorithm | `opt` |
+| **RNG** | Random Number Generator | `abbr` |
+| **SIMD** | Single Instruction Multiple Data | `abbr` |
+| **SoA** | Structure of Arrays — cache-friendly layout | `opt` |
+| **Specificity (s)** | Controls pattern generality; higher = fewer literals | `train` |
+| **TA** | Tsetlin Automaton | `abbr` |
+| **Threshold (T)** | Controls feedback probability | `train` |
+| **TM** | Tsetlin Machine | `abbr` |
+| **Tsetlin Automaton** | FSM that learns include/exclude via reinforcement | `core` |
+| **Tsetlin Machine** | ML algorithm using propositional logic | `core` |
+| **Type I Feedback** | Reinforces patterns for target class | `train` |
+| **Type II Feedback** | Blocks false positives with contradicting literals | `train` |
+
+<sub>`core` — fundamentals · `train` — training · `opt` — optimization · `abbr` — abbreviation</sub>
+
+</details>
 
 ## Table of Contents
 
@@ -29,7 +60,6 @@ A professional Rust implementation of the Tsetlin Machine algorithm for interpre
 - [Feature Flags](#feature-flags)
 - [API Overview](#api-overview)
 - [Algorithm Details](#algorithm-details)
-- [Glossary](#glossary)
 - [Coverage](#coverage)
 - [In Memory of Michael Tsetlin](#in-memory-of-michael-tsetlin)
 - [Based On](#based-on)
@@ -679,44 +709,6 @@ negated: [u64; 2]  // 16 bytes
 
 <div align="right"><a href="#top">Back to top</a></div>
 
----
-
-## Glossary
-
-<details>
-<summary><strong>Terms & Abbreviations</strong></summary>
-
-<br/>
-
-| Term | Definition | Category |
-|:-----|:-----------|:--------:|
-| **AoS** | Array of Structures — traditional object layout | `opt` |
-| **Bit-plane** | Transposed bit representation for parallel operations | `opt` |
-| **Clause** | Conjunction (AND) of literals; votes for/against a class | `core` |
-| **CoTM** | Coalesced Tsetlin Machine | `abbr` |
-| **CTM** | Convolutional Tsetlin Machine | `abbr` |
-| **FPGA** | Field-Programmable Gate Array | `abbr` |
-| **Literal** | Boolean variable (`x_k`) or its negation (`¬x_k`) | `core` |
-| **MSB** | Most Significant Bit — encodes automaton action | `opt` |
-| **Polarity** | Clause vote direction: +1 or −1 | `core` |
-| **Ripple-carry** | Bit-level addition/subtraction algorithm | `opt` |
-| **RNG** | Random Number Generator | `abbr` |
-| **SIMD** | Single Instruction Multiple Data | `abbr` |
-| **SoA** | Structure of Arrays — cache-friendly layout | `opt` |
-| **Specificity (s)** | Controls pattern generality; higher = fewer literals | `train` |
-| **TA** | Tsetlin Automaton | `abbr` |
-| **Threshold (T)** | Controls feedback probability | `train` |
-| **TM** | Tsetlin Machine | `abbr` |
-| **Tsetlin Automaton** | FSM that learns include/exclude via reinforcement | `core` |
-| **Tsetlin Machine** | ML algorithm using propositional logic | `core` |
-| **Type I Feedback** | Reinforces patterns for target class | `train` |
-| **Type II Feedback** | Blocks false positives with contradicting literals | `train` |
-
-<sub>`core` — fundamentals · `train` — training · `opt` — optimization · `abbr` — abbreviation</sub>
-
-</details>
-
-<div align="right"><a href="#top">Back to top</a></div>
 
 ---
 
