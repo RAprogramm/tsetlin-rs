@@ -493,3 +493,37 @@ jobs:
             fi
           done
           echo "All CI checks passed!"
+
+  # ============================================================================
+  # Cleanup: Delete cancelled workflow runs
+  # ============================================================================
+
+  cleanup:
+    name: Cleanup Cancelled Runs
+    if: always()
+    needs: [ci-success]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Delete cancelled workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Get cancelled runs for this workflow on this branch
+          CANCELLED=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/actions/runs?branch=${{ github.ref_name }}&status=cancelled&per_page=100" \
+            --jq '.workflow_runs[] | select(.name == "${{ github.workflow }}") | .id')
+
+          if [ -z "$CANCELLED" ]; then
+            echo "No cancelled runs to delete"
+            exit 0
+          fi
+
+          echo "Deleting cancelled runs..."
+          for run_id in $CANCELLED; do
+            echo "Deleting run $run_id"
+            gh api -X DELETE "/repos/${{ github.repository }}/actions/runs/$run_id" || true
+          done
+          echo "Cleanup complete"
