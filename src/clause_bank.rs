@@ -16,7 +16,7 @@
 //! | 100     | 8.55     | 8.39     | 1.02x   |
 //! | 200     | 18.50    | 16.02    | 1.15x   |
 //!
-//! Benefits increase with SIMD vectorization (planned feature).
+//! Benefits increase with SIMD vectorization (requires `simd` feature).
 //!
 //! # Memory Layout
 //!
@@ -58,7 +58,7 @@
 //! |----------|----------------|
 //! | Bulk clause operations | **ClauseBank** |
 //! | Per-clause access patterns | `Vec<Clause>` |
-//! | SIMD vectorization (future) | **ClauseBank** |
+//! | SIMD feedback (`simd` feature) | **ClauseBank** |
 //! | Serialization with serde | Both supported |
 
 #[cfg(not(feature = "std"))]
@@ -69,6 +69,9 @@ use serde::{Deserialize, Serialize};
 
 mod eval;
 mod feedback;
+
+#[cfg(feature = "simd")]
+mod simd;
 
 #[cfg(test)]
 mod tests;
