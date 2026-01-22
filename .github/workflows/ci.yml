@@ -91,15 +91,9 @@ jobs:
     needs: [fmt, check, check-simd, check-no-std, clippy, doc, test, test-simd, coverage]
     runs-on: ubuntu-latest
     steps:
-      - run: |
-          results=("${{ needs.fmt.result }}" "${{ needs.check.result }}" \
-                   "${{ needs.check-simd.result }}" "${{ needs.check-no-std.result }}" \
-                   "${{ needs.clippy.result }}" "${{ needs.doc.result }}" \
-                   "${{ needs.test.result }}" "${{ needs.test-simd.result }}" \
-                   "${{ needs.coverage.result }}")
-          for r in "${results[@]}"; do
-            [[ "$r" != "success" ]] && exit 1
-          done
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - run: echo "All CI checks passed!"
 
   # Cleanup
   cleanup:
