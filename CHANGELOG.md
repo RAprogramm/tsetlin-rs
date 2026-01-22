@@ -2,60 +2,12 @@
 
 ---
 
-## Unreleased
+## v0.2.2
 
-- [`ea1990a`](https://github.com/RAprogramm/tsetlin-rs/commit/ea1990a4e7071dcab46e418eaf9f203505642c49) [#15](https://github.com/RAprogramm/tsetlin-rs/issues/15) 🐛 fix: enable codecov comments for all PRs
+- [`79905a5`](https://github.com/RAprogramm/tsetlin-rs/commit/79905a55a0837fa99963d7166d2697fc73e4bd01) 16 ([#20](https://github.com/RAprogramm/tsetlin-rs/issues/20))
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
 
-- [`b29dd24`](https://github.com/RAprogramm/tsetlin-rs/commit/b29dd24b9d3b10d7c2885d8a13d0c58f3d4d62b5) [#15](https://github.com/RAprogramm/tsetlin-rs/issues/15) 📚 docs: redesign glossary with A-Z order and categories
-  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
-
-- [`e2f02d5`](https://github.com/RAprogramm/tsetlin-rs/commit/e2f02d5f775f727a857b107d4ade9d523d3026bc) [#15](https://github.com/RAprogramm/tsetlin-rs/issues/15) ✨ feat: integer-based probability comparison for faster RNG
-  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
-
-- [`26b5b8a`](https://github.com/RAprogramm/tsetlin-rs/commit/26b5b8aa2279b312f86f4a862623a2e445203712) 14 ([#18](https://github.com/RAprogramm/tsetlin-rs/issues/18))
-  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
-
-- [`e68d2ec`](https://github.com/RAprogramm/tsetlin-rs/commit/e68d2ece572231416d6bca54c70153eaa5f967aa) 📚 docs: add BitPlaneBank to README
-  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
-
-- [`5e27aaa`](https://github.com/RAprogramm/tsetlin-rs/commit/5e27aaa59886c13b40cdc8ea36994d6048ebdf1e) ✨ feat(bitplane): add Type I/II feedback with parallel operations
-  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
-
-- [`344d75c`](https://github.com/RAprogramm/tsetlin-rs/commit/344d75c5af3fe05ddcaf1e1e1a2b60457971484e) [#14](https://github.com/RAprogramm/tsetlin-rs/issues/14) 📚 docs: add glossary section to README
-  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
-
-- [`c1e5e00`](https://github.com/RAprogramm/tsetlin-rs/commit/c1e5e00ab694e9f06c347d3096e3a86e10bc5ab6) [#14](https://github.com/RAprogramm/tsetlin-rs/issues/14) ✨ feat: BitPlaneBank with bitwise evaluation
-  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
-
-- [`936e7d5`](https://github.com/RAprogramm/tsetlin-rs/commit/936e7d5bcc11136693de305ce63c80e34d24f890) 3 ([#12](https://github.com/RAprogramm/tsetlin-rs/issues/12))
-  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
-
-- [`fd22202`](https://github.com/RAprogramm/tsetlin-rs/commit/fd22202cc36dd8a33d0d3e9370b536b59a006289) [#3](https://github.com/RAprogramm/tsetlin-rs/issues/3) 🔧 ci: add JUnit XML test results for Codecov Test Analytics
-  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
-
-- [`61beeff`](https://github.com/RAprogramm/tsetlin-rs/commit/61beeff696ffb68271e13e2cebbc9ae91a688b1c) [#3](https://github.com/RAprogramm/tsetlin-rs/issues/3) ✨ feat: optimize ClauseBank evaluation and add benchmarks
-  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
-
-- [`d9bdd34`](https://github.com/RAprogramm/tsetlin-rs/commit/d9bdd347f470ec67be2226092cdeafa9854f2416) [#3](https://github.com/RAprogramm/tsetlin-rs/issues/3) ✨ feat: add ClauseBank SoA storage for cache-efficient operations
-  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
-
-- [`8742f6f`](https://github.com/RAprogramm/tsetlin-rs/commit/8742f6f8e84fa615c8e072f90d7baec060325226) [#3](https://github.com/RAprogramm/tsetlin-rs/issues/3) 🔨 chore: start SoA layout implementation
-  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
-
-- [`a3039dc`](https://github.com/RAprogramm/tsetlin-rs/commit/a3039dc99abf35f8ee132edee3b538cf47ffeb4b) 🐛 fix: releases
-  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
-
-- [`a7bfeda`](https://github.com/RAprogramm/tsetlin-rs/commit/a7bfeda325c6aea4e26487e89a7d2ef4cb85f24b) 🔧 ci: auto-create GitHub release when version is in changelog
-  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
-
-- [`d4d75eb`](https://github.com/RAprogramm/tsetlin-rs/commit/d4d75eb94257ae2da0b21dad871da7583dd25afb) 💎 style: REUSE badge with for-the-badge styling
-  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
-
-- [`987959e`](https://github.com/RAprogramm/tsetlin-rs/commit/987959e29f05874e64dca203700ddc23717b3cb9) 🐛 fix: use official REUSE badge
-  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
-
-- [`bcd0c93`](https://github.com/RAprogramm/tsetlin-rs/commit/bcd0c9309faffda8940e9d21ccfe98c02144a417) 🐛 fix: changelog generation logic and restructure CHANGELOG.md
+- [`de68679`](https://github.com/RAprogramm/tsetlin-rs/commit/de686793d262a5f94cf23ca78bdfaa3d59a9d1e7) 15 ([#19](https://github.com/RAprogramm/tsetlin-rs/issues/19))
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
 
 ## v0.1.0
