@@ -17,7 +17,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: test-${{ matrix.os }}
-          shared-key: stable
-          cache-targets: true
+          shared-key: ${{ matrix.os }}-stable
+          save-if: false
       - run: cargo test --features "${{ matrix.features }}"

@@ -16,6 +16,5 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: ${{ matrix.os }}
-          shared-key: stable
+          shared-key: ${{ matrix.os }}-stable
       - run: cargo check --features "parallel,serde"

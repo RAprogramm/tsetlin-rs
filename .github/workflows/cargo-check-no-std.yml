@@ -11,6 +11,5 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: no-std
-          shared-key: stable
+          shared-key: ubuntu-no-std
       - run: cargo check --no-default-features

@@ -11,8 +11,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: doc
-          shared-key: stable
+          shared-key: ubuntu-latest-stable
+          save-if: false
       - run: cargo doc --no-deps --features "parallel,serde"
         env:
           RUSTDOCFLAGS: -Dwarnings

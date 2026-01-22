@@ -11,7 +11,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: test-simd
-          shared-key: nightly
-          cache-targets: true
+          shared-key: ubuntu-nightly
+          save-if: false
       - run: cargo +nightly test --all-features

@@ -13,6 +13,6 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: clippy
-          shared-key: stable
+          shared-key: ubuntu-latest-stable
+          save-if: false
       - run: cargo clippy --all-targets --features "parallel,serde" -- -D warnings

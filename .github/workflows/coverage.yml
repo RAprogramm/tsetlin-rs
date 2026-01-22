@@ -16,9 +16,8 @@ jobs:
       - uses: taiki-e/install-action@cargo-nextest
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: coverage
-          shared-key: stable
-          cache-targets: true
+          shared-key: ubuntu-latest-stable
+          save-if: false
       - run: cargo llvm-cov --features "parallel,serde" --lcov --output-path lcov.info
       - uses: codecov/codecov-action@v5
         with:

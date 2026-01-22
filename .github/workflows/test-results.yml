@@ -15,8 +15,8 @@ jobs:
       - uses: taiki-e/install-action@cargo-nextest
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: test-results
-          shared-key: stable
+          shared-key: ubuntu-latest-stable
+          save-if: false
       - run: cargo nextest run --features "parallel,serde" --profile ci
         continue-on-error: true
       - if: ${{ !cancelled() }}
