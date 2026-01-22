@@ -13,6 +13,12 @@
 - [`888b56e`](https://github.com/RAprogramm/tsetlin-rs/commit/888b56ee669dbfcdf571bec7ed37ebbe7b77fcbc) 17 ([#21](https://github.com/RAprogramm/tsetlin-rs/issues/21))
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
 
+- [`8cd35a8`](https://github.com/RAprogramm/tsetlin-rs/commit/8cd35a882c63d04f3c51ea522e5dd6f4bd0c1ec4) 🔧 ci: add on-merge workflow for changelog/publish/release
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`fe56285`](https://github.com/RAprogramm/tsetlin-rs/commit/fe56285230ae130ad2cf7adfbd8e151f77efa67c) Dev ([#22](https://github.com/RAprogramm/tsetlin-rs/issues/22))
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
 ## v0.2.1
 
 - [`de68679`](https://github.com/RAprogramm/tsetlin-rs/commit/de686793d262a5f94cf23ca78bdfaa3d59a9d1e7) 15 ([#19](https://github.com/RAprogramm/tsetlin-rs/issues/19))
