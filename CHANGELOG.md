@@ -4,6 +4,21 @@
 
 ## Unreleased
 
+- [`e68d2ec`](https://github.com/RAprogramm/tsetlin-rs/commit/e68d2ece572231416d6bca54c70153eaa5f967aa) 📚 docs: add BitPlaneBank to README
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`5e27aaa`](https://github.com/RAprogramm/tsetlin-rs/commit/5e27aaa59886c13b40cdc8ea36994d6048ebdf1e) ✨ feat(bitplane): add Type I/II feedback with parallel operations
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`344d75c`](https://github.com/RAprogramm/tsetlin-rs/commit/344d75c5af3fe05ddcaf1e1e1a2b60457971484e) [#14](https://github.com/RAprogramm/tsetlin-rs/issues/14) 📚 docs: add glossary section to README
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`c1e5e00`](https://github.com/RAprogramm/tsetlin-rs/commit/c1e5e00ab694e9f06c347d3096e3a86e10bc5ab6) [#14](https://github.com/RAprogramm/tsetlin-rs/issues/14) ✨ feat: BitPlaneBank with bitwise evaluation
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
+- [`936e7d5`](https://github.com/RAprogramm/tsetlin-rs/commit/936e7d5bcc11136693de305ce63c80e34d24f890) 3 ([#12](https://github.com/RAprogramm/tsetlin-rs/issues/12))
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
 - [`fd22202`](https://github.com/RAprogramm/tsetlin-rs/commit/fd22202cc36dd8a33d0d3e9370b536b59a006289) [#3](https://github.com/RAprogramm/tsetlin-rs/issues/3) 🔧 ci: add JUnit XML test results for Codecov Test Analytics
   [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
 

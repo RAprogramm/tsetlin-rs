@@ -4,7 +4,7 @@
 
 #![cfg(feature = "simd")]
 
-use std::simd::{Simd, cmp::SimdPartialEq, u8x32};
+use std::simd::{cmp::SimdPartialEq, u8x32};
 
 /// # Overview
 ///
