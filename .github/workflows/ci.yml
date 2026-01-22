@@ -62,7 +62,7 @@ jobs:
     needs: [test, doc]
     uses: ./.github/workflows/changelog.yml
     with:
-      enabled: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && !contains(github.event.head_commit.message, 'chore: update changelog') }}
+      enabled: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && !contains(github.event.head_commit.message, 'chore') }}
 
   # Stage 6: Publish
   publish:
