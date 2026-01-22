@@ -345,23 +345,21 @@ jobs:
             // Build changelog
             let changelog = '# Changelog\n\n---\n\n';
 
-            const isMain = context.ref === 'refs/heads/main';
             const isNewVersion = !existingVersions.has(currentVersion);
 
-            // Combine new commits with existing unreleased
-            const allUnreleased = [...newCommits, ...unreleasedEntries];
-
-            if (isMain && isNewVersion && allUnreleased.length > 0) {
-              // NEW VERSION: Move all unreleased to version section
+            // New commits go to current version section (not Unreleased)
+            // This ensures each version bump creates its own section
+            if (isNewVersion && newCommits.length > 0) {
+              // NEW VERSION: Create version section with new commits
               console.log(`Creating new version section: ${currentVersion}`);
               changelog += `## ${currentVersion}\n\n`;
-              changelog += allUnreleased.join('\n\n') + '\n\n';
-            } else {
-              // NO NEW VERSION: Keep in Unreleased
+              changelog += newCommits.join('\n\n') + '\n\n';
+            }
+
+            // Keep any orphaned unreleased entries (edge case)
+            if (unreleasedEntries.length > 0 && (existingVersions.has(currentVersion) || newCommits.length === 0)) {
               changelog += '## Unreleased\n\n';
-              if (allUnreleased.length > 0) {
-                changelog += allUnreleased.join('\n\n') + '\n\n';
-              }
+              changelog += unreleasedEntries.join('\n\n') + '\n\n';
             }
 
             // Append all existing versioned sections (NEVER modify or delete)
