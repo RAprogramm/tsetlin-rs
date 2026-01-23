@@ -243,4 +243,146 @@ mod tests {
         let x_packed = vec![1u64];
         assert!(c.evaluate_packed(&x_packed));
     }
+
+    #[test]
+    fn bitwise_clause_accessors() {
+        let c = BitwiseClause::new(128, 100, -1);
+
+        assert_eq!(c.polarity(), -1);
+        assert_eq!(c.n_features(), 128);
+        assert_eq!(c.automata().len(), 256); // 2 * n_features
+    }
+
+    #[test]
+    fn bitwise_automata_mut_sets_dirty() {
+        let mut c = BitwiseClause::new(64, 100, 1);
+        c.rebuild_masks();
+
+        // Access automata_mut sets dirty flag
+        let _ = c.automata_mut();
+
+        // Rebuild should execute (not early exit due to dirty=true)
+        c.rebuild_masks();
+        // No assertion needed - just verify it doesn't panic
+    }
+
+    #[test]
+    fn bitwise_vote_packed() {
+        let mut c = BitwiseClause::new(64, 100, 1);
+        c.rebuild_masks(); // Empty clause fires
+
+        // Empty clause fires -> returns polarity (1)
+        assert_eq!(c.vote_packed(&[0u64]), 1);
+
+        // Force include[0] active
+        for _ in 0..200 {
+            c.automata_mut()[0].increment();
+        }
+        c.rebuild_masks();
+
+        // Violation: x[0]=0 -> returns 0
+        assert_eq!(c.vote_packed(&[0u64]), 0);
+
+        // Fires: x[0]=1 -> returns polarity (1)
+        assert_eq!(c.vote_packed(&[1u64]), 1);
+    }
+
+    #[test]
+    fn bitwise_vote_packed_negative_polarity() {
+        let mut c = BitwiseClause::new(64, 100, -1);
+        c.rebuild_masks();
+
+        // Empty clause fires -> returns polarity (-1)
+        assert_eq!(c.vote_packed(&[0u64]), -1);
+    }
+
+    #[test]
+    fn bitwise_evaluate_scalar() {
+        let mut c = BitwiseClause::new(4, 100, 1);
+
+        // Force include[0] and negated[2] active
+        for _ in 0..200 {
+            c.automata_mut()[0].increment(); // include[0]
+            c.automata_mut()[5].increment(); // negated[2]
+        }
+
+        // x[0]=1, x[2]=0 -> should fire
+        assert!(c.evaluate(&[1, 0, 0, 0]));
+
+        // x[0]=0 -> include violation
+        assert!(!c.evaluate(&[0, 0, 0, 0]));
+
+        // x[2]=1 -> negated violation
+        assert!(!c.evaluate(&[1, 0, 1, 0]));
+    }
+
+    #[test]
+    fn bitwise_evaluate_scalar_empty() {
+        let c = BitwiseClause::new(4, 100, 1);
+        // Empty clause always fires
+        assert!(c.evaluate(&[0, 0, 0, 0]));
+        assert!(c.evaluate(&[1, 1, 1, 1]));
+    }
+
+    #[test]
+    fn pack_batch_multiple() {
+        let xs = vec![vec![1, 0, 0, 0], vec![0, 1, 0, 0], vec![1, 1, 0, 0]];
+        let packed = pack_batch(&xs);
+
+        assert_eq!(packed.len(), 3);
+        assert_eq!(packed[0][0], 0b0001); // bit 0 set
+        assert_eq!(packed[1][0], 0b0010); // bit 1 set
+        assert_eq!(packed[2][0], 0b0011); // bits 0,1 set
+    }
+
+    #[test]
+    fn pack_input_large() {
+        // 128 features = 2 words
+        let mut x = vec![0u8; 128];
+        x[0] = 1;
+        x[63] = 1;
+        x[64] = 1;
+        x[127] = 1;
+
+        let packed = pack_input(&x);
+        assert_eq!(packed.len(), 2);
+        assert_eq!(packed[0], 1u64 | (1u64 << 63)); // bits 0, 63
+        assert_eq!(packed[1], 1u64 | (1u64 << 63)); // bits 64, 127 (relative to word)
+    }
+
+    #[test]
+    fn bitwise_negated_violation() {
+        let mut c = BitwiseClause::new(64, 100, 1);
+
+        // Force negated[0] active
+        for _ in 0..200 {
+            c.automata_mut()[1].increment();
+        }
+        c.rebuild_masks();
+
+        // x[0]=1 -> negated violation
+        assert!(!c.evaluate_packed(&[1u64]));
+
+        // x[0]=0 -> fires
+        assert!(c.evaluate_packed(&[0u64]));
+    }
+
+    #[test]
+    fn bitwise_multi_word() {
+        let mut c = BitwiseClause::new(128, 100, 1);
+
+        // Force include[64] active (second word)
+        for _ in 0..200 {
+            c.automata_mut()[128].increment(); // automata[2*64] = include for feature 64
+        }
+        c.rebuild_masks();
+
+        // Need bit 64 set (which is bit 0 of word 1)
+        let x_packed = vec![0u64, 1u64];
+        assert!(c.evaluate_packed(&x_packed));
+
+        // Without bit 64 -> violation
+        let x_packed = vec![0u64, 0u64];
+        assert!(!c.evaluate_packed(&x_packed));
+    }
 }
