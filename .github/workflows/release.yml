@@ -33,13 +33,8 @@ jobs:
             exit 0
           fi
 
-          # Get squash commit body (last commit on main)
-          NOTES=$(git log -1 --pretty=format:"%b" HEAD)
-
-          # Fallback to commit subject if body is empty
-          if [ -z "$NOTES" ]; then
-            NOTES=$(git log -1 --pretty=format:"%s" HEAD)
-          fi
+          # Get full squash commit message (subject + body)
+          NOTES=$(git log -1 --pretty=format:"%B" HEAD)
 
           echo "Release notes:"
           echo "$NOTES"
