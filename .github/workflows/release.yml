@@ -33,11 +33,18 @@ jobs:
             exit 0
           fi
 
+          # Create tag if it doesn't exist
+          if ! git rev-parse "$TAG" &>/dev/null; then
+            git tag "$TAG"
+            git push origin "$TAG"
+            echo "Created tag $TAG"
+          fi
+
           # Get full squash commit message (subject + body)
           NOTES=$(git log -1 --pretty=format:"%B" HEAD)
 
           echo "Release notes:"
           echo "$NOTES"
 
-          # Create release
-          echo "$NOTES" | gh release create "$TAG" --title "$TAG" --notes-file - --target main --latest
+          # Create release with tag
+          echo "$NOTES" | gh release create "$TAG" --title "$TAG" --notes-file - --latest

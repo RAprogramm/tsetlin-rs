@@ -24,132 +24,195 @@ jobs:
             const fs = require('fs');
             const { execSync } = require('child_process');
 
-            // Store all entries by SHA (guarantees no duplicates)
-            // Map<SHA, { version: string, entry: string }>
-            const entriesBySha = new Map();
+            const repoUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
+            const types = {
+              feat: { emoji: '✨', label: 'Features', priority: 1 },
+              fix: { emoji: '🐛', label: 'Bug Fixes', priority: 2 },
+              perf: { emoji: '⚡', label: 'Performance', priority: 3 },
+              refactor: { emoji: '♻️', label: 'Refactoring', priority: 4 },
+              docs: { emoji: '📚', label: 'Documentation', priority: 5 },
+              test: { emoji: '🧪', label: 'Tests', priority: 6 },
+              ci: { emoji: '🔧', label: 'CI/CD', priority: 7 },
+              build: { emoji: '📦', label: 'Build', priority: 8 },
+              style: { emoji: '💎', label: 'Style', priority: 9 },
+              chore: { emoji: '🔨', label: 'Chores', priority: 10 }
+            };
 
-            // Parse existing changelog
+            // Get current branch
+            const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
+
+            // Get commits grouped by version
+            const gitLog = execSync(
+              'git log -200 --pretty=format:"%H|%h|%s|%an|%aI|%D" --no-merges',
+              { encoding: 'utf8' }
+            );
+
+            const commitsByVersion = new Map();
+            const processedShas = new Set();
+
+            // Load existing changelog to avoid duplicates
             if (fs.existsSync('CHANGELOG.md')) {
               const existing = fs.readFileSync('CHANGELOG.md', 'utf8');
-
-              // Split by version headers
-              const sections = existing.split(/(?=^## v[\d.]+)/m);
-
-              for (const section of sections) {
-                const versionMatch = section.match(/^## (v[\d.]+)/);
-                if (!versionMatch) continue;
-                const version = versionMatch[1];
-
-                // Extract entries (each starts with "- [`sha`]")
-                const entryRegex = /^- \[`([a-f0-9]{7})`\][^\n]*\n  [^\n]+/gm;
-                let match;
-                while ((match = entryRegex.exec(section)) !== null) {
-                  const sha = match[1];
-                  const entry = match[0];
-                  if (!entriesBySha.has(sha)) {
-                    entriesBySha.set(sha, { version, entry });
-                  }
-                }
+              const shaMatches = existing.matchAll(/\[`([a-f0-9]{7})`\]/g);
+              for (const match of shaMatches) {
+                processedShas.add(match[1]);
               }
             }
 
-            console.log(`Existing entries: ${entriesBySha.size}`);
-
-            // Get commits from git
-            const gitLog = execSync('git log -200 --pretty=format:"%H|%h|%s|%an" --no-merges', { encoding: 'utf8' });
-
-            let newCount = 0;
             for (const line of gitLog.split('\n').filter(l => l)) {
-              const [sha, shaShort, message, author] = line.split('|');
+              const [sha, shaShort, message, author, date, refs] = line.split('|');
 
-              // Skip if already in changelog
-              if (entriesBySha.has(shaShort)) continue;
-
-              // Skip changelog commits and merges
+              if (processedShas.has(shaShort)) continue;
               if (message.includes('chore: update changelog')) continue;
               if (message.includes('Merge pull request')) continue;
+              if (message.includes('Merge branch')) continue;
 
               // Get version from Cargo.toml at this commit
               let version = 'v0.0.0';
               try {
-                const cargoAtCommit = execSync(`git show ${sha}:Cargo.toml 2>/dev/null`, { encoding: 'utf8' });
-                const vMatch = cargoAtCommit.match(/^version\s*=\s*"([^"]+)"/m);
-                if (vMatch) version = `v${vMatch[1]}`;
-              } catch (e) {
-                console.log(`Could not get version for ${shaShort}`);
+                const cargo = execSync(`git show ${sha}:Cargo.toml 2>/dev/null`, { encoding: 'utf8' });
+                const m = cargo.match(/^version\s*=\s*"([^"]+)"/m);
+                if (m) version = `v${m[1]}`;
+              } catch (e) {}
+
+              // Parse commit type
+              let type = 'other';
+              let scope = '';
+              let desc = message;
+              let issue = '';
+
+              const issueMatch = message.match(/^#(\d+)\s+/);
+              if (issueMatch) {
+                issue = issueMatch[1];
+                desc = message.slice(issueMatch[0].length);
               }
 
-              // Get commit details from GitHub API
+              const typeMatch = desc.match(/^(\w+)(?:\(([^)]+)\))?:\s*(.+)$/);
+              if (typeMatch) {
+                type = typeMatch[1].toLowerCase();
+                scope = typeMatch[2] || '';
+                desc = typeMatch[3];
+              }
+
+              // Get author info
+              let authorInfo = { name: author, avatar: '', url: '' };
               try {
-                const { data: commitData } = await github.rest.repos.getCommit({
+                const { data } = await github.rest.repos.getCommit({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   ref: sha
                 });
-
-                const ghAuthor = commitData.author;
-                const authorAvatar = ghAuthor?.avatar_url
-                  ? `[<img src="${ghAuthor.avatar_url}" width="20" height="20" style="border-radius:50%" title="${ghAuthor.login}"/>](${ghAuthor.html_url})`
-                  : `**${author}**`;
-
-                const repoUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
-                let linkedMessage = message.replace(/#(\d+)/g, `[#$1](${repoUrl}/issues/$1)`);
-
-                // Add emoji for conventional commits
-                const typeMatch = linkedMessage.match(/^(\[#\d+\]\([^)]+\)\s+)?(\w+)(\([^)]+\))?:\s*(.+)$/);
-                if (typeMatch) {
-                  const [, issue = '', type, scope = '', desc] = typeMatch;
-                  const types = {
-                    feat: '✨', fix: '🐛', docs: '📚', style: '💎',
-                    refactor: '♻️', perf: '⚡', test: '🧪', build: '📦',
-                    ci: '🔧', chore: '🔨', revert: '⏪'
+                if (data.author) {
+                  authorInfo = {
+                    name: data.author.login,
+                    avatar: data.author.avatar_url,
+                    url: data.author.html_url
                   };
-                  const emoji = types[type] || '📝';
-                  linkedMessage = `${issue}${emoji} ${type}${scope}: ${desc}`;
                 }
+              } catch (e) {}
 
-                const entry = `- [\`${shaShort}\`](${commitData.html_url}) ${linkedMessage}\n  ${authorAvatar}`;
-                entriesBySha.set(shaShort, { version, entry });
-                newCount++;
-              } catch (e) {
-                console.log(`Skip ${shaShort}: ${e.message}`);
+              // Detect branch from refs or PR
+              let branch = currentBranch;
+              if (refs) {
+                const branchMatch = refs.match(/origin\/(\w+)/);
+                if (branchMatch) branch = branchMatch[1];
               }
+
+              if (!commitsByVersion.has(version)) {
+                commitsByVersion.set(version, { commits: [], date: date.split('T')[0] });
+              }
+
+              commitsByVersion.get(version).commits.push({
+                sha, shaShort, type, scope, desc, issue, author: authorInfo, date, branch
+              });
             }
 
-            console.log(`New entries added: ${newCount}`);
-
-            // Group entries by version
-            const byVersion = new Map();
-            for (const [sha, { version, entry }] of entriesBySha) {
-              if (!byVersion.has(version)) {
-                byVersion.set(version, []);
-              }
-              byVersion.get(version).push(entry);
-            }
-
-            // Sort versions (newest first)
-            const sortedVersions = [...byVersion.keys()].sort((a, b) => {
-              const partsA = a.slice(1).split('.').map(Number);
-              const partsB = b.slice(1).split('.').map(Number);
+            // Sort versions
+            const sortedVersions = [...commitsByVersion.keys()].sort((a, b) => {
+              const pa = a.slice(1).split('.').map(Number);
+              const pb = b.slice(1).split('.').map(Number);
               for (let i = 0; i < 3; i++) {
-                if ((partsA[i] || 0) !== (partsB[i] || 0)) {
-                  return (partsB[i] || 0) - (partsA[i] || 0);
-                }
+                if ((pa[i] || 0) !== (pb[i] || 0)) return (pb[i] || 0) - (pa[i] || 0);
               }
               return 0;
             });
 
-            console.log(`Versions in changelog: ${sortedVersions.join(', ')}`);
-
             // Build changelog
-            let changelog = '# Changelog\n\n---\n\n';
+            let changelog = '# Changelog\n\n';
+            changelog += '> Auto-generated from commits. Grouped by type, sorted by priority.\n\n';
+            changelog += '---\n\n';
 
             for (const version of sortedVersions) {
-              changelog += `## ${version}\n\n`;
-              changelog += byVersion.get(version).join('\n\n') + '\n\n';
+              const { commits, date } = commitsByVersion.get(version);
+              if (commits.length === 0) continue;
+
+              // Version header with metadata
+              const prevVersion = sortedVersions[sortedVersions.indexOf(version) + 1];
+              const compareLink = prevVersion
+                ? `[compare](${repoUrl}/compare/${prevVersion}...${version})`
+                : '';
+
+              changelog += '## ' + version + '\n\n';
+              const commitWord = commits.length > 1 ? 'commits' : 'commit';
+              const cmpLink = compareLink ? ' · ' + compareLink : '';
+              changelog += '> 📅 ' + date + ' · ' + commits.length + ' ' + commitWord + cmpLink + '\n\n';
+
+              // Group by type
+              const byType = new Map();
+              for (const c of commits) {
+                const t = types[c.type] ? c.type : 'other';
+                if (!byType.has(t)) byType.set(t, []);
+                byType.get(t).push(c);
+              }
+
+              // Sort types by priority
+              const sortedTypes = [...byType.keys()].sort((a, b) => {
+                return (types[a]?.priority || 99) - (types[b]?.priority || 99);
+              });
+
+              for (const type of sortedTypes) {
+                const typeInfo = types[type] || { emoji: '📝', label: 'Other' };
+                const typeCommits = byType.get(type);
+
+                // Collapsible if > 5 items
+                const needsCollapse = typeCommits.length > 5;
+
+                if (needsCollapse) {
+                  changelog += '<details>\n';
+                  changelog += '<summary>' + typeInfo.emoji + ' <strong>' + typeInfo.label + '</strong> (' + typeCommits.length + ')</summary>\n\n';
+                } else {
+                  changelog += '### ' + typeInfo.emoji + ' ' + typeInfo.label + '\n\n';
+                }
+
+                // Table format
+                changelog += '| Commit | Description | Author | Branch |\n';
+                changelog += '|:-------|:------------|:------:|:------:|\n';
+
+                for (const c of typeCommits) {
+                  const commitLink = `[\`${c.shaShort}\`](${repoUrl}/commit/${c.sha})`;
+                  const issueLink = c.issue ? `[#${c.issue}](${repoUrl}/issues/${c.issue}) ` : '';
+                  const scopeBadge = c.scope ? `\`${c.scope}\` ` : '';
+                  const desc = `${issueLink}${scopeBadge}${c.desc}`;
+                  const avatar = c.author.avatar
+                    ? `[<img src="${c.author.avatar}" width="20" title="${c.author.name}"/>](${c.author.url})`
+                    : c.author.name;
+                  const branch = `\`${c.branch}\``;
+
+                  changelog += `| ${commitLink} | ${desc} | ${avatar} | ${branch} |\n`;
+                }
+
+                if (needsCollapse) {
+                  changelog += '\n</details>\n\n';
+                } else {
+                  changelog += '\n';
+                }
+              }
+
+              changelog += '---\n\n';
             }
 
-            fs.writeFileSync('CHANGELOG.md', changelog);
+            fs.writeFileSync('CHANGELOG.md', changelog.trim() + '\n');
+            console.log(`Generated changelog with ${sortedVersions.length} versions`);
 
       - run: |
           git config user.name "github-actions[bot]"
