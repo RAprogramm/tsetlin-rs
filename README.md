@@ -1073,26 +1073,6 @@ fn train_epoch(tm: &mut TsetlinMachine, X: &[Vec<u8>], Y: &[u8], T: f32, s: f32)
 
 ## Coverage
 
-<details>
-<summary><strong>Coverage Visualization</strong></summary>
-
-### Sunburst
-
-<p align="center">
-  <a href="https://codecov.io/gh/RAprogramm/tsetlin-rs">
-    <img src="https://codecov.io/gh/RAprogramm/tsetlin-rs/graphs/sunburst.svg?token=dSDoNSNudX" alt="Sunburst"/>
-  </a>
-</p>
-
-### Grid
-
-<p align="center">
-  <a href="https://codecov.io/gh/RAprogramm/tsetlin-rs">
-    <img src="https://codecov.io/gh/RAprogramm/tsetlin-rs/graphs/tree.svg?token=dSDoNSNudX" alt="Grid"/>
-  </a>
-</p>
-
-### Icicle
 
 <p align="center">
   <a href="https://codecov.io/gh/RAprogramm/tsetlin-rs">
@@ -1100,7 +1080,6 @@ fn train_epoch(tm: &mut TsetlinMachine, X: &[Vec<u8>], Y: &[u8], T: f32, s: f32)
   </a>
 </p>
 
-</details>
 
 <div align="right"><a href="#top">Back to top</a></div>
 

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2025 RA <contact@rprogram.ru>
+# SPDX-License-Identifier: MIT
+
 name: Changelog
 
 on:
@@ -18,203 +21,262 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/github-script@v8
+      - name: Update changelog
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
             const { execSync } = require('child_process');
 
             const repoUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
-            const types = {
-              feat: { emoji: '✨', label: 'Features', priority: 1 },
-              fix: { emoji: '🐛', label: 'Bug Fixes', priority: 2 },
-              perf: { emoji: '⚡', label: 'Performance', priority: 3 },
-              refactor: { emoji: '♻️', label: 'Refactoring', priority: 4 },
-              docs: { emoji: '📚', label: 'Documentation', priority: 5 },
-              test: { emoji: '🧪', label: 'Tests', priority: 6 },
-              ci: { emoji: '🔧', label: 'CI/CD', priority: 7 },
-              build: { emoji: '📦', label: 'Build', priority: 8 },
-              style: { emoji: '💎', label: 'Style', priority: 9 },
-              chore: { emoji: '🔨', label: 'Chores', priority: 10 }
+
+            // Category mapping (conventional commits -> Keep a Changelog)
+            const categoryMap = {
+              feat: 'Added',
+              fix: 'Fixed',
+              perf: 'Changed',
+              refactor: 'Changed',
+              docs: 'Changed',
+              test: 'Changed',
+              ci: 'Changed',
+              build: 'Changed',
+              style: 'Changed',
+              security: 'Security',
+              deprecate: 'Deprecated',
+              remove: 'Removed'
             };
 
-            // Get current branch
-            const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
+            // Get current commit info
+            const commit = context.payload.head_commit;
+            if (!commit) {
+              console.log('No head_commit found, skipping');
+              return;
+            }
 
-            // Get commits grouped by version
-            const gitLog = execSync(
-              'git log -200 --pretty=format:"%H|%h|%s|%an|%aI|%D" --no-merges',
-              { encoding: 'utf8' }
+            // Skip changelog commits
+            if (commit.message.includes('chore: update changelog')) {
+              console.log('Changelog commit, skipping');
+              return;
+            }
+            if (commit.message.startsWith('Merge ')) {
+              console.log('Merge commit, skipping');
+              return;
+            }
+
+            // Parse commit message
+            let type = 'other';
+            let scope = '';
+            let description = commit.message.split('\n')[0];
+            let issueNum = '';
+            let prNum = '';
+
+            // Check for issue prefix: #123 type: desc
+            const issueMatch = description.match(/^#(\d+)\s+/);
+            if (issueMatch) {
+              issueNum = issueMatch[1];
+              description = description.slice(issueMatch[0].length);
+            }
+
+            // Parse conventional commit: type(scope): description
+            const typeMatch = description.match(/^(\w+)(?:\(([^)]+)\))?:\s*(.+)$/);
+            if (typeMatch) {
+              type = typeMatch[1].toLowerCase();
+              scope = typeMatch[2] || '';
+              description = typeMatch[3];
+            }
+
+            // Skip chore commits (except chore with scope)
+            if (type === 'chore' && !scope) {
+              console.log('Chore commit without scope, skipping');
+              return;
+            }
+
+            // Get category
+            const category = categoryMap[type] || 'Changed';
+
+            // Get version from Cargo.toml
+            const cargoToml = fs.readFileSync('Cargo.toml', 'utf8');
+            const versionMatch = cargoToml.match(/^version\s*=\s*"([^"]+)"/m);
+            const currentVersion = versionMatch ? versionMatch[1] : '0.0.0';
+
+            // Get author info
+            const authorName = commit.author.username || commit.author.name;
+            const authorLink = commit.author.username
+              ? `[@${authorName}](https://github.com/${authorName})`
+              : authorName;
+
+            // Get branch
+            const branch = context.ref.replace('refs/heads/', '');
+
+            // Get PR number if available (from commit message or API)
+            const prMatch = description.match(/\(#(\d+)\)$/);
+            if (prMatch) {
+              prNum = prMatch[1];
+              description = description.replace(/\s*\(#\d+\)$/, '');
+            }
+
+            // Commit link
+            const shaShort = commit.id.substring(0, 7);
+            const commitLink = `[\`${shaShort}\`](${repoUrl}/commit/${commit.id})`;
+
+            // Build reference column (PR > Issue > Commit)
+            let refCol;
+            if (prNum) {
+              refCol = `[#${prNum}](${repoUrl}/pull/${prNum})`;
+            } else if (issueNum) {
+              refCol = `[#${issueNum}](${repoUrl}/issues/${issueNum})`;
+            } else {
+              refCol = commitLink;
+            }
+
+            // Format: | Change | Author | Branch | Ref |
+            const scopePrefix = scope ? `\`${scope}\` ` : '';
+            const newEntry = `| ${scopePrefix}${description} | ${authorLink} | \`${branch}\` | ${refCol} |`;
+
+            // Read or create changelog
+            let changelog;
+            const changelogPath = 'CHANGELOG.md';
+
+            if (fs.existsSync(changelogPath)) {
+              changelog = fs.readFileSync(changelogPath, 'utf8');
+            } else {
+              changelog = '# Changelog\n\n';
+              changelog += '> All notable changes to this project will be documented in this file.\n';
+              changelog += '> Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Versioning](https://semver.org/)\n\n';
+              changelog += '## [Unreleased]\n\n---\n\n';
+            }
+
+            // Check if current version exists in changelog
+            const versionRegex = new RegExp(`^## \\[${currentVersion}\\]`, 'm');
+            const hasCurrentVersion = versionRegex.test(changelog);
+            const hasUnreleased = changelog.includes('## [Unreleased]');
+
+            // Determine target section
+            let targetSection;
+            if (hasCurrentVersion) {
+              // Version exists, add to it
+              targetSection = currentVersion;
+            } else if (hasUnreleased) {
+              // New version - convert Unreleased to version
+              const today = new Date().toISOString().split('T')[0];
+
+              // Check if Unreleased has content
+              const unreleasedMatch = changelog.match(
+                /## \[Unreleased\]\n([\s\S]*?)(?=\n---|\n## \[)/
+              );
+
+              if (unreleasedMatch && unreleasedMatch[1].trim()) {
+                // Has content - convert to version
+                changelog = changelog.replace(
+                  /## \[Unreleased\]\n/,
+                  `## [Unreleased]\n\n---\n\n## [${currentVersion}] - ${today}\n`
+                );
+              } else {
+                // Empty Unreleased - just add version header
+                changelog = changelog.replace(
+                  /## \[Unreleased\]\n+---/,
+                  `## [Unreleased]\n\n---\n\n## [${currentVersion}] - ${today}`
+                );
+              }
+              targetSection = currentVersion;
+            } else {
+              // No Unreleased, no version - add both
+              const today = new Date().toISOString().split('T')[0];
+              let header = '# Changelog\n\n';
+              header += '> All notable changes to this project will be documented in this file.\n';
+              header += '> Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [Semantic Versioning](https://semver.org/)\n\n';
+              header += '## [Unreleased]\n\n---\n\n';
+              header += '## [' + currentVersion + '] - ' + today + '\n\n';
+              changelog = header + changelog.replace(/^# Changelog[\s\S]*?(?=## \[)/, '');
+              targetSection = currentVersion;
+            }
+
+            // Find or create category section within target version
+            const sectionRegex = new RegExp(
+              `(## \\[${targetSection}\\][^\\n]*\\n)([\\s\\S]*?)(?=\\n---\\n|\\n## \\[|$)`
             );
+            const sectionMatch = changelog.match(sectionRegex);
 
-            const commitsByVersion = new Map();
-            const processedShas = new Set();
+            if (sectionMatch) {
+              let sectionContent = sectionMatch[2];
 
-            // Load existing changelog to avoid duplicates
-            if (fs.existsSync('CHANGELOG.md')) {
-              const existing = fs.readFileSync('CHANGELOG.md', 'utf8');
-              const shaMatches = existing.matchAll(/\[`([a-f0-9]{7})`\]/g);
-              for (const match of shaMatches) {
-                processedShas.add(match[1]);
-              }
-            }
+              // Check if category exists (as details or h3)
+              const detailsRegex = new RegExp(
+                `(<details[^>]*>\\n<summary><strong>${category}</strong>)([^<]*)(</summary>\\n\\n\\| Change \\|[^\\n]*\\n\\|[^\\n]*\\n)([\\s\\S]*?)(</details>)`
+              );
+              const h3Regex = new RegExp(
+                `(### ${category}\\n\\n\\| Change \\|[^\\n]*\\n\\|[^\\n]*\\n)([\\s\\S]*?)(?=\\n###|\\n<details|\\n---|$)`
+              );
 
-            for (const line of gitLog.split('\n').filter(l => l)) {
-              const [sha, shaShort, message, author, date, refs] = line.split('|');
+              const detailsMatch = sectionContent.match(detailsRegex);
+              const h3Match = sectionContent.match(h3Regex);
 
-              if (processedShas.has(shaShort)) continue;
-              if (message.includes('chore: update changelog')) continue;
-              if (message.includes('Merge pull request')) continue;
-              if (message.includes('Merge branch')) continue;
-
-              // Get version from Cargo.toml at this commit
-              let version = 'v0.0.0';
-              try {
-                const cargo = execSync(`git show ${sha}:Cargo.toml 2>/dev/null`, { encoding: 'utf8' });
-                const m = cargo.match(/^version\s*=\s*"([^"]+)"/m);
-                if (m) version = `v${m[1]}`;
-              } catch (e) {}
-
-              // Parse commit type
-              let type = 'other';
-              let scope = '';
-              let desc = message;
-              let issue = '';
-
-              const issueMatch = message.match(/^#(\d+)\s+/);
-              if (issueMatch) {
-                issue = issueMatch[1];
-                desc = message.slice(issueMatch[0].length);
-              }
-
-              const typeMatch = desc.match(/^(\w+)(?:\(([^)]+)\))?:\s*(.+)$/);
-              if (typeMatch) {
-                type = typeMatch[1].toLowerCase();
-                scope = typeMatch[2] || '';
-                desc = typeMatch[3];
-              }
-
-              // Get author info
-              let authorInfo = { name: author, avatar: '', url: '' };
-              try {
-                const { data } = await github.rest.repos.getCommit({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  ref: sha
-                });
-                if (data.author) {
-                  authorInfo = {
-                    name: data.author.login,
-                    avatar: data.author.avatar_url,
-                    url: data.author.html_url
-                  };
-                }
-              } catch (e) {}
-
-              // Detect branch from refs or PR
-              let branch = currentBranch;
-              if (refs) {
-                const branchMatch = refs.match(/origin\/(\w+)/);
-                if (branchMatch) branch = branchMatch[1];
-              }
-
-              if (!commitsByVersion.has(version)) {
-                commitsByVersion.set(version, { commits: [], date: date.split('T')[0] });
-              }
-
-              commitsByVersion.get(version).commits.push({
-                sha, shaShort, type, scope, desc, issue, author: authorInfo, date, branch
-              });
-            }
-
-            // Sort versions
-            const sortedVersions = [...commitsByVersion.keys()].sort((a, b) => {
-              const pa = a.slice(1).split('.').map(Number);
-              const pb = b.slice(1).split('.').map(Number);
-              for (let i = 0; i < 3; i++) {
-                if ((pa[i] || 0) !== (pb[i] || 0)) return (pb[i] || 0) - (pa[i] || 0);
-              }
-              return 0;
-            });
-
-            // Build changelog
-            let changelog = '# Changelog\n\n';
-            changelog += '> Auto-generated from commits. Grouped by type, sorted by priority.\n\n';
-            changelog += '---\n\n';
-
-            for (const version of sortedVersions) {
-              const { commits, date } = commitsByVersion.get(version);
-              if (commits.length === 0) continue;
-
-              // Version header with metadata
-              const prevVersion = sortedVersions[sortedVersions.indexOf(version) + 1];
-              const compareLink = prevVersion
-                ? `[compare](${repoUrl}/compare/${prevVersion}...${version})`
-                : '';
-
-              changelog += '## ' + version + '\n\n';
-              const commitWord = commits.length > 1 ? 'commits' : 'commit';
-              const cmpLink = compareLink ? ' · ' + compareLink : '';
-              changelog += '> 📅 ' + date + ' · ' + commits.length + ' ' + commitWord + cmpLink + '\n\n';
-
-              // Group by type
-              const byType = new Map();
-              for (const c of commits) {
-                const t = types[c.type] ? c.type : 'other';
-                if (!byType.has(t)) byType.set(t, []);
-                byType.get(t).push(c);
-              }
-
-              // Sort types by priority
-              const sortedTypes = [...byType.keys()].sort((a, b) => {
-                return (types[a]?.priority || 99) - (types[b]?.priority || 99);
-              });
-
-              for (const type of sortedTypes) {
-                const typeInfo = types[type] || { emoji: '📝', label: 'Other' };
-                const typeCommits = byType.get(type);
-
-                // Collapsible if > 5 items
-                const needsCollapse = typeCommits.length > 5;
-
-                if (needsCollapse) {
-                  changelog += '<details>\n';
-                  changelog += '<summary>' + typeInfo.emoji + ' <strong>' + typeInfo.label + '</strong> (' + typeCommits.length + ')</summary>\n\n';
+              if (detailsMatch) {
+                // Add to existing details section
+                const count = (detailsMatch[4].match(/^\|/gm) || []).length + 1;
+                const newContent = detailsMatch[1] + ` (${count})` + detailsMatch[3] +
+                                   newEntry + '\n' + detailsMatch[4] + detailsMatch[5];
+                sectionContent = sectionContent.replace(detailsRegex, newContent);
+              } else if (h3Match) {
+                // Add to existing h3 section, check if needs collapse
+                const existingEntries = (h3Match[2].match(/^\|/gm) || []).length;
+                if (existingEntries >= 5) {
+                  // Convert to details
+                  const newContent = `<details>\n<summary><strong>${category}</strong> (${existingEntries + 1})</summary>\n\n| Change | Author | Branch | Ref |\n|--------|--------|--------|-----|\n${newEntry}\n${h3Match[2]}</details>`;
+                  sectionContent = sectionContent.replace(h3Regex, newContent);
                 } else {
-                  changelog += '### ' + typeInfo.emoji + ' ' + typeInfo.label + '\n\n';
+                  // Keep as h3
+                  const newContent = h3Match[1] + newEntry + '\n' + h3Match[2];
+                  sectionContent = sectionContent.replace(h3Regex, newContent);
                 }
+              } else {
+                // Create new category section
+                const newCategory = `\n### ${category}\n\n| Change | Author | Branch | Ref |\n|--------|--------|--------|-----|\n${newEntry}\n`;
 
-                // Table format
-                changelog += '| Commit | Description | Author | Branch |\n';
-                changelog += '|:-------|:------------|:------:|:------:|\n';
-
-                for (const c of typeCommits) {
-                  const commitLink = `[\`${c.shaShort}\`](${repoUrl}/commit/${c.sha})`;
-                  const issueLink = c.issue ? `[#${c.issue}](${repoUrl}/issues/${c.issue}) ` : '';
-                  const scopeBadge = c.scope ? `\`${c.scope}\` ` : '';
-                  const desc = `${issueLink}${scopeBadge}${c.desc}`;
-                  const avatar = c.author.avatar
-                    ? `[<img src="${c.author.avatar}" width="20" title="${c.author.name}"/>](${c.author.url})`
-                    : c.author.name;
-                  const branch = `\`${c.branch}\``;
-
-                  changelog += `| ${commitLink} | ${desc} | ${avatar} | ${branch} |\n`;
-                }
-
-                if (needsCollapse) {
-                  changelog += '\n</details>\n\n';
+                // Insert after version header or alert
+                if (sectionContent.match(/^> \[!/m)) {
+                  // Has alert, insert after
+                  sectionContent = sectionContent.replace(
+                    /(> \[![^\]]+\][^\n]*\n(?:>[^\n]*\n)*\n?)/,
+                    '$1' + newCategory
+                  );
                 } else {
-                  changelog += '\n';
+                  // No alert, insert at start
+                  sectionContent = newCategory + sectionContent;
                 }
               }
 
-              changelog += '---\n\n';
+              changelog = changelog.replace(sectionRegex, sectionMatch[1] + sectionContent);
             }
 
-            fs.writeFileSync('CHANGELOG.md', changelog.trim() + '\n');
-            console.log(`Generated changelog with ${sortedVersions.length} versions`);
+            // Update compare links at bottom
+            const versions = [...changelog.matchAll(/## \[(\d+\.\d+\.\d+)\]/g)]
+              .map(m => m[1])
+              .filter((v, i, a) => a.indexOf(v) === i);
 
-      - run: |
+            // Remove old links section
+            changelog = changelog.replace(/\n\[Unreleased\]:[\s\S]*$/, '');
+
+            // Add new links
+            let links = '\n';
+            if (versions.length > 0) {
+              links += `[Unreleased]: ${repoUrl}/compare/v${versions[0]}...HEAD\n`;
+              for (let i = 0; i < versions.length; i++) {
+                if (i < versions.length - 1) {
+                  links += `[${versions[i]}]: ${repoUrl}/compare/v${versions[i+1]}...v${versions[i]}\n`;
+                } else {
+                  links += `[${versions[i]}]: ${repoUrl}/releases/tag/v${versions[i]}\n`;
+                }
+              }
+            }
+
+            changelog = changelog.trimEnd() + '\n' + links;
+
+            fs.writeFileSync(changelogPath, changelog);
+            console.log(`Added ${category} entry to ${targetSection}: ${description}`);
+
+      - name: Commit changelog
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add CHANGELOG.md

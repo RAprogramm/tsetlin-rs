@@ -45,9 +45,10 @@ jobs:
           fi
 
           # Extract release notes from CHANGELOG.md for this version
-          NOTES=$(awk -v tag="$TAG" '
-            $0 ~ "^## " tag { found=1; next }
-            found && /^## v[0-9]/ { exit }
+          # Format: ## [X.Y.Z] - YYYY-MM-DD
+          NOTES=$(awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { found=1; next }
+            found && /^## \[/ { exit }
             found && /^---$/ { exit }
             found { print }
           ' CHANGELOG.md)
