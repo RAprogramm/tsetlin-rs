@@ -22,28 +22,27 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSIONS=$(grep -oP '^## \Kv[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md | tac)
-          if [ -z "$VERSIONS" ]; then
-            echo "No versions found in CHANGELOG.md"
+          # Get version from Cargo.toml
+          VERSION=$(grep -oP '^version\s*=\s*"\K[^"]+' Cargo.toml)
+          TAG="v$VERSION"
+          echo "Version: $TAG"
+
+          # Check if release already exists
+          if gh release view "$TAG" &>/dev/null; then
+            echo "Release $TAG already exists, skipping"
             exit 0
           fi
-          echo "Found versions: $(echo $VERSIONS | tr '\n' ' ')"
 
-          for TAG in $VERSIONS; do
-            echo "Processing $TAG..."
-            if gh release view "$TAG" &>/dev/null; then
-              echo "Release $TAG exists, skipping"
-              continue
-            fi
-            NOTES=$(awk -v tag="$TAG" '
-              $0 ~ "^## " tag "$" { found=1; next }
-              found && /^## v[0-9]/ { exit }
-              found { print }
-            ' CHANGELOG.md)
-            [ -z "$NOTES" ] && NOTES="Release $TAG"
-            echo "$NOTES" | gh release create "$TAG" --title "$TAG" --notes-file - --target main --latest=false
-            echo "Created $TAG"
-          done
+          # Get squash commit body (last commit on main)
+          NOTES=$(git log -1 --pretty=format:"%b" HEAD)
 
-          LATEST=$(echo "$VERSIONS" | tail -1)
-          [ -n "$LATEST" ] && gh release edit "$LATEST" --latest || true
+          # Fallback to commit subject if body is empty
+          if [ -z "$NOTES" ]; then
+            NOTES=$(git log -1 --pretty=format:"%s" HEAD)
+          fi
+
+          echo "Release notes:"
+          echo "$NOTES"
+
+          # Create release
+          echo "$NOTES" | gh release create "$TAG" --title "$TAG" --notes-file - --target main --latest
