@@ -74,11 +74,14 @@ The Tsetlin Machine is a machine learning algorithm based on propositional logic
 
 | Term | Definition | Category |
 |:-----|:-----------|:--------:|
+| **AL** | Active Literals — literals that actively contribute to predictions | `sparse` |
 | **AoS** | Array of Structures — traditional object layout | `opt` |
 | **Bit-plane** | Transposed bit representation for parallel operations | `opt` |
 | **Clause** | Conjunction (AND) of literals; votes for/against a class | `core` |
 | **CoTM** | Coalesced Tsetlin Machine | `abbr` |
+| **CSR** | Compressed Sparse Row — sparse matrix format using data/indices/offsets arrays | `sparse` |
 | **CTM** | Convolutional Tsetlin Machine | `abbr` |
+| **Early exit** | Terminating clause evaluation on first literal violation | `opt` |
 | **False sharing** | Cache line contention between CPU cores | `opt` |
 | **FPGA** | Field-Programmable Gate Array | `abbr` |
 | **Literal** | Boolean variable (`xₖ`) or its negation (`¬xₖ`) | `core` |
@@ -87,13 +90,16 @@ The Tsetlin Machine is a machine learning algorithm based on propositional logic
 | **Ripple-carry** | Bit-level addition/subtraction algorithm | `opt` |
 | **RNG** | Random Number Generator | `abbr` |
 | **SIMD** | Single Instruction Multiple Data | `abbr` |
+| **SmallVec** | Inline vector — stack storage up to N elements, heap beyond | `opt` |
 | **SoA** | Structure of Arrays — cache-friendly layout | `opt` |
+| **Sparsity** | Fraction of active literals vs total possible (lower = sparser) | `sparse` |
 | **Specificity (s)** | Controls pattern generality; higher = fewer literals | `train` |
+| **STM** | Sparse Tsetlin Machine | `abbr` |
 | **TA** | Tsetlin Automaton | `abbr` |
 | **Threshold (T)** | Controls feedback probability | `train` |
 | **TM** | Tsetlin Machine | `abbr` |
 
-<sub>`core` — fundamentals · `train` — training · `opt` — optimization · `abbr` — abbreviation</sub>
+<sub>`core` — fundamentals · `train` — training · `opt` — optimization · `sparse` — sparse representation · `abbr` — abbreviation</sub>
 
 </details>
 
@@ -234,6 +240,65 @@ let config = ConvConfig {
 };
 let mut ctm = Convolutional::new(config, 15);
 ```
+
+### Sparse Inference — `SparseTsetlinMachine`
+
+Memory-efficient inference using sparse clause representation. Convert trained model for deployment with 50-125x memory reduction.
+
+```rust
+use tsetlin_rs::{Config, TsetlinMachine};
+
+// Train as usual
+let config = Config::builder().clauses(200).features(784).build().unwrap();
+let mut tm = TsetlinMachine::new(config, 15);
+tm.fit(&x_train, &y_train, 100, 42);
+
+// Convert to sparse for deployment
+let sparse = tm.to_sparse();
+
+// Same predictions, much less memory
+assert_eq!(tm.predict(&x_test[0]), sparse.predict(&x_test[0]));
+
+// Check compression ratio
+println!("Compression: {:.1}x", sparse.compression_ratio());
+```
+
+**Sparse Representation:**
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    DENSE (ClauseBank)                                │
+├─────────────────────────────────────────────────────────────────────┤
+│  Clause 0: [TA₀, TA₁, TA₂, ..., TA₂ₙ₋₁]  ← stores ALL 2N automata   │
+│  Clause 1: [TA₀, TA₁, TA₂, ..., TA₂ₙ₋₁]                             │
+│  ...                                                                 │
+│  Memory: O(clauses × 2 × features × sizeof(i16))                     │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                    SPARSE (SparseClauseBank) — CSR Format           │
+├─────────────────────────────────────────────────────────────────────┤
+│  include_indices: [0, 5, 12 | 3, 7 | ...]   ← only active literals  │
+│  include_offsets: [0, 3, 5, ...]            ← clause boundaries     │
+│  negated_indices: [2, 8 | 1, 4, 9 | ...]                            │
+│  negated_offsets: [0, 2, 5, ...]                                    │
+│  weights: [1.0, 0.8, ...]                                           │
+│  polarities: [+1, -1, ...]                                          │
+│  Memory: O(total_active_literals × sizeof(u16))                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Benchmark Results (realistic data):**
+
+| Dataset | Features | Compression | Speedup |
+|---------|----------|-------------|---------|
+| MNIST-like | 784 | **117.6x** | **65x** |
+| NLP 5k vocab | 5,000 | **59.3x** | **38x** |
+| NLP 10k vocab | 10,000 | **124.8x** | **75x** |
+
+**When to use:**
+- Deployment on memory-constrained devices
+- High-dimensional sparse data (NLP, bag-of-words)
+- Batch inference where memory bandwidth matters
 
 <div align="right"><a href="#top">Back to top</a></div>
 
@@ -955,6 +1020,7 @@ fn train_epoch(tm: &mut TsetlinMachine, X: &[Vec<u8>], Y: &[u8], T: f32, s: f32)
 | `MultiClass` | Multi-class (one-vs-all) |
 | `Regressor` | Continuous output |
 | `Convolutional` | 2D patch extraction |
+| `SparseTsetlinMachine` | Memory-efficient inference (50-125x compression) |
 
 ### Clauses
 
@@ -971,6 +1037,8 @@ fn train_epoch(tm: &mut TsetlinMachine, X: &[Vec<u8>], Y: &[u8], T: f32, s: f32)
 |------|-------------|
 | `ClauseBank` | SoA layout for bulk operations |
 | `BitPlaneBank` | Bit-plane for parallel updates |
+| `SparseClause` | SmallVec-based sparse clause (≤32 literals inline) |
+| `SparseClauseBank` | CSR format for memory-efficient batch inference |
 
 ### Parallel Training
 
@@ -1067,6 +1135,18 @@ His work on collective automata behavior laid the theoretical foundation for wha
 > **Massively Parallel and Asynchronous Tsetlin Machine Architecture Supporting Almost Constant-Time Scaling**
 > K. Darshana Abeyrathna et al., ICML 2021
 > [arXiv:2009.04861](https://arxiv.org/abs/2009.04861)
+
+### Sparse Representation
+
+> **The Sparse Tsetlin Machine: Sparse Representation with Active Literals**
+> Sebastian Østby, Tobias M. Brambo, Sondre Glimsdal, 2024
+> [arXiv:2405.02375](https://arxiv.org/abs/2405.02375)
+
+### CPU Inference Optimization
+
+> **Fast and Compact Tsetlin Machine Inference on CPUs Using Instruction-Level Optimization**
+> 2025
+> [arXiv:2510.15653](https://arxiv.org/abs/2510.15653)
 
 ### Implementations
 

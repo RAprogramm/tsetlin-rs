@@ -478,3 +478,70 @@ fn parallel_training_concurrent_tallies() {
         tally.sum()
     );
 }
+
+#[test]
+fn sparse_prediction_matches_dense() {
+    let config = Config::builder().clauses(100).features(64).build().unwrap();
+    let mut tm = TsetlinMachine::new(config, 15);
+
+    // Generate training data
+    let x: Vec<Vec<u8>> = (0..200)
+        .map(|i| (0..64).map(|j| ((i + j) % 2) as u8).collect())
+        .collect();
+    let y: Vec<u8> = (0..200).map(|i| (i % 2) as u8).collect();
+
+    tm.fit(&x, &y, 50, 42);
+
+    // Convert to sparse
+    let sparse = tm.to_sparse();
+
+    // Verify ALL predictions match
+    for xi in &x {
+        assert_eq!(
+            tm.predict(xi),
+            sparse.predict(xi),
+            "Sparse prediction must match dense"
+        );
+    }
+
+    // Verify accuracy matches
+    let dense_acc = tm.evaluate(&x, &y);
+    let sparse_acc = sparse.evaluate(&x, &y);
+    assert!(
+        (dense_acc - sparse_acc).abs() < 0.001,
+        "Accuracy must match: dense={}, sparse={}",
+        dense_acc,
+        sparse_acc
+    );
+}
+
+#[test]
+fn sparse_compression_ratio() {
+    let config = Config::builder()
+        .clauses(100)
+        .features(1000)
+        .build()
+        .unwrap();
+    let mut tm = TsetlinMachine::new(config, 15);
+
+    let x: Vec<Vec<u8>> = (0..100)
+        .map(|i| (0..1000).map(|j| ((i + j) % 2) as u8).collect())
+        .collect();
+    let y: Vec<u8> = (0..100).map(|i| (i % 2) as u8).collect();
+
+    tm.fit(&x, &y, 30, 42);
+
+    let sparse = tm.to_sparse();
+    let stats = sparse.memory_stats();
+
+    // Dense: 100 clauses * 2 * 1000 features * 2 bytes = 400KB
+    let dense_bytes = 100 * 2 * 1000 * 2;
+    let compression = dense_bytes as f32 / stats.total() as f32;
+
+    // Should achieve at least 2x compression
+    assert!(
+        compression > 2.0,
+        "Compression ratio should be > 2x, got {:.1}x",
+        compression
+    );
+}

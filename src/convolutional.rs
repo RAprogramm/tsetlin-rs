@@ -163,16 +163,72 @@ fn extract_patch(image: &[u8], row: usize, col: usize, ps: usize, w: usize) -> V
 mod tests {
     use super::*;
 
-    #[test]
-    fn predict_valid() {
-        let config = ConvConfig {
+    fn test_config() -> ConvConfig {
+        ConvConfig {
             n_clauses:   10,
             n_states:    100,
             s:           3.0,
             patch_size:  2,
             image_width: 4
-        };
-        let tm = Convolutional::new(config, 3, 15);
+        }
+    }
+
+    #[test]
+    fn predict_valid() {
+        let tm = Convolutional::new(test_config(), 3, 15);
         assert!(tm.predict(&[0u8; 16]) < 3);
+    }
+
+    #[test]
+    fn class_votes_returns_all_classes() {
+        let tm = Convolutional::new(test_config(), 3, 15);
+        let votes = tm.class_votes(&[0u8; 16]);
+        assert_eq!(votes.len(), 3);
+    }
+
+    #[test]
+    fn fit_and_predict() {
+        let mut tm = Convolutional::new(test_config(), 2, 15);
+
+        // Simple 4x4 images: class 0 has top-left corner set, class 1 has bottom-right
+        let images = vec![
+            vec![1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // class 0: top-left
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1], // class 1: bottom-right
+            vec![1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // class 0
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1], // class 1
+        ];
+        let labels = vec![0, 1, 0, 1];
+
+        tm.fit(&images, &labels, 50, 42);
+
+        // Should return valid predictions
+        assert!(tm.predict(&images[0]) < 2);
+        assert!(tm.predict(&images[1]) < 2);
+    }
+
+    #[test]
+    fn evaluate_returns_valid_accuracy() {
+        let tm = Convolutional::new(test_config(), 2, 15);
+
+        let images = vec![vec![0u8; 16], vec![1u8; 16]];
+        let labels = vec![0, 1];
+
+        let acc = tm.evaluate(&images, &labels);
+        assert!((0.0..=1.0).contains(&acc));
+    }
+
+    #[test]
+    fn extract_patch_correct() {
+        let image = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+        let patch = extract_patch(&image, 1, 1, 2, 4);
+        assert_eq!(patch, vec![5, 6, 9, 10]);
+    }
+
+    #[test]
+    fn extract_patch_out_of_bounds() {
+        let image = vec![0, 1, 2, 3];
+        let patch = extract_patch(&image, 0, 0, 3, 2);
+        // Should handle out-of-bounds gracefully with 0s
+        assert_eq!(patch.len(), 9);
     }
 }

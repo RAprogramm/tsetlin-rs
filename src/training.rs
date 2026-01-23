@@ -218,4 +218,62 @@ mod tests {
         assert!(!tracker.update(0.6));
         assert!(tracker.update(0.6));
     }
+
+    #[test]
+    fn fit_options_new() {
+        let opts = FitOptions::new(50, 123);
+        assert_eq!(opts.epochs, 50);
+        assert_eq!(opts.seed, 123);
+        assert!(opts.shuffle);
+        assert!(opts.early_stop.is_none());
+        assert!(opts.callback.is_none());
+    }
+
+    #[test]
+    fn fit_options_with_early_stop() {
+        let opts = FitOptions::new(100, 42).with_early_stop(5, 0.001);
+        let es = opts.early_stop.unwrap();
+        assert_eq!(es.patience, 5);
+        assert!((es.min_delta - 0.001).abs() < 0.0001);
+    }
+
+    #[test]
+    fn fit_options_no_shuffle() {
+        let opts = FitOptions::new(100, 42).no_shuffle();
+        assert!(!opts.shuffle);
+    }
+
+    #[test]
+    fn fit_options_with_callback() {
+        let opts = FitOptions::new(100, 42).with_callback(|_epoch, _acc| true);
+        assert!(opts.callback.is_some());
+    }
+
+    #[test]
+    fn fit_options_debug() {
+        let opts = FitOptions::new(100, 42).with_callback(|_, _| true);
+        let debug_str = format!("{:?}", opts);
+        assert!(debug_str.contains("FitOptions"));
+        assert!(debug_str.contains("epochs"));
+        assert!(debug_str.contains("100"));
+    }
+
+    #[test]
+    fn fit_result_new() {
+        let result = FitResult::new(50, 0.95, true);
+        assert_eq!(result.epochs_run, 50);
+        assert!((result.final_accuracy - 0.95).abs() < 0.001);
+        assert!(result.stopped_early);
+        assert!(result.history.is_empty());
+    }
+
+    #[test]
+    fn fit_result_with_history() {
+        let history = vec![0.5, 0.7, 0.85, 0.9];
+        let result = FitResult::with_history(4, 0.9, false, history.clone());
+        assert_eq!(result.epochs_run, 4);
+        assert!((result.final_accuracy - 0.9).abs() < 0.001);
+        assert!(!result.stopped_early);
+        assert_eq!(result.history, history);
+    }
 }

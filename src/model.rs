@@ -57,3 +57,113 @@ pub trait VotingModel<X>: TsetlinModel<X, u8> {
     /// Returns raw vote sum for input.
     fn sum_votes(&self, x: &X) -> f32;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct MockModel;
+
+    impl TsetlinModel<u8, u8> for MockModel {
+        fn fit(&mut self, _x: &[u8], _y: &[u8], _epochs: usize, _seed: u64) {}
+
+        fn predict(&self, x: &u8) -> u8 {
+            *x % 2
+        }
+
+        fn evaluate(&self, x: &[u8], y: &[u8]) -> f32 {
+            let correct = x
+                .iter()
+                .zip(y)
+                .filter(|(xi, yi)| self.predict(xi) == **yi)
+                .count();
+            correct as f32 / x.len() as f32
+        }
+    }
+
+    #[test]
+    fn predict_batch_default_impl() {
+        let model = MockModel;
+        let xs = vec![0, 1, 2, 3, 4];
+        let preds = model.predict_batch(&xs);
+        assert_eq!(preds, vec![0, 1, 0, 1, 0]);
+    }
+
+    #[test]
+    fn mock_model_fit() {
+        let mut model = MockModel;
+        model.fit(&[1, 2, 3], &[0, 1, 0], 10, 42);
+        // fit is no-op, just verify it doesn't panic
+    }
+
+    #[test]
+    fn mock_model_evaluate() {
+        let model = MockModel;
+        // predict(x) = x % 2, so:
+        // x=0 -> 0, y=0 -> correct
+        // x=1 -> 1, y=1 -> correct
+        // x=2 -> 0, y=0 -> correct
+        let acc = model.evaluate(&[0, 1, 2], &[0, 1, 0]);
+        assert!((acc - 1.0).abs() < 0.001);
+
+        // 50% accuracy case
+        let acc2 = model.evaluate(&[0, 1, 2, 3], &[1, 0, 1, 0]);
+        assert!((acc2 - 0.0).abs() < 0.001);
+    }
+
+    struct MockVotingModel;
+
+    impl TsetlinModel<u8, u8> for MockVotingModel {
+        fn fit(&mut self, _x: &[u8], _y: &[u8], _epochs: usize, _seed: u64) {}
+
+        fn predict(&self, x: &u8) -> u8 {
+            if self.sum_votes(x) >= 0.0 { 1 } else { 0 }
+        }
+
+        fn evaluate(&self, x: &[u8], y: &[u8]) -> f32 {
+            let correct = x
+                .iter()
+                .zip(y)
+                .filter(|(xi, yi)| self.predict(xi) == **yi)
+                .count();
+            correct as f32 / x.len() as f32
+        }
+    }
+
+    impl VotingModel<u8> for MockVotingModel {
+        fn sum_votes(&self, x: &u8) -> f32 {
+            (*x as f32) - 2.0 // returns negative for x < 2, positive for x >= 2
+        }
+    }
+
+    #[test]
+    fn voting_model_sum_votes() {
+        let model = MockVotingModel;
+
+        assert!((model.sum_votes(&0) - (-2.0)).abs() < 0.001);
+        assert!((model.sum_votes(&2) - 0.0).abs() < 0.001);
+        assert!((model.sum_votes(&5) - 3.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn voting_model_predict_uses_votes() {
+        let model = MockVotingModel;
+
+        // x < 2: negative votes -> predict 0
+        assert_eq!(model.predict(&0), 0);
+        assert_eq!(model.predict(&1), 0);
+
+        // x >= 2: non-negative votes -> predict 1
+        assert_eq!(model.predict(&2), 1);
+        assert_eq!(model.predict(&5), 1);
+    }
+
+    #[test]
+    fn voting_model_evaluate() {
+        let model = MockVotingModel;
+        let xs = vec![0, 1, 2, 3];
+        let ys = vec![0, 0, 1, 1];
+        let acc = model.evaluate(&xs, &ys);
+        assert!((acc - 1.0).abs() < 0.001);
+    }
+}

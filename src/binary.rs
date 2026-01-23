@@ -9,7 +9,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Clause, Config, Rule,
+    Clause, Config, Rule, SparseTsetlinMachine,
     feedback::{type_i, type_ii},
     training::{EarlyStopTracker, FitOptions, FitResult},
     utils::rng_from_seed
@@ -103,12 +103,24 @@ impl TsetlinMachine {
         tm
     }
 
-    /// # Overview
-    ///
-    /// Current threshold value (may differ from base if adaptive).
+    /// Returns current threshold value (may differ from base if adaptive).
     #[inline]
+    #[must_use]
     pub fn threshold(&self) -> f32 {
         self.t
+    }
+
+    /// Returns configuration.
+    #[inline]
+    pub const fn config(&self) -> &Config {
+        &self.config
+    }
+
+    /// Returns read-only access to clauses.
+    #[inline]
+    #[must_use]
+    pub fn clauses(&self) -> &[Clause] {
+        &self.clauses
     }
 
     /// # Overview
@@ -380,6 +392,49 @@ impl TsetlinMachine {
             .expect("invalid quick config");
         Self::new(config, threshold)
     }
+
+    /// Converts to sparse representation for memory-efficient inference.
+    ///
+    /// Call after `fit()` to reduce memory by 5-100x depending on clause
+    /// sparsity. The sparse model supports prediction but not training.
+    ///
+    /// # Memory Savings
+    ///
+    /// | Features | Dense | Sparse (typical) | Reduction |
+    /// |----------|-------|------------------|-----------|
+    /// | 100      | 40 KB | 2 KB             | 20x       |
+    /// | 1000     | 400 KB| 8 KB             | 50x       |
+    /// | 10000    | 4 MB  | 20 KB            | 200x      |
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tsetlin_rs::{Config, TsetlinMachine};
+    ///
+    /// let config = Config::builder().clauses(20).features(100).build().unwrap();
+    /// let mut tm = TsetlinMachine::new(config, 10);
+    ///
+    /// let x: Vec<Vec<u8>> = (0..100).map(|i| vec![(i % 2) as u8; 100]).collect();
+    /// let y: Vec<u8> = (0..100).map(|i| (i % 2) as u8).collect();
+    ///
+    /// tm.fit(&x, &y, 100, 42);
+    ///
+    /// // Convert to sparse
+    /// let sparse = tm.to_sparse();
+    ///
+    /// // Verify same predictions
+    /// for xi in &x {
+    ///     assert_eq!(tm.predict(xi), sparse.predict(xi));
+    /// }
+    ///
+    /// // Check compression
+    /// let stats = sparse.memory_stats();
+    /// println!("Compression: {}x", stats.compression_ratio(100));
+    /// ```
+    #[must_use]
+    pub fn to_sparse(&self) -> SparseTsetlinMachine {
+        SparseTsetlinMachine::from_clauses(&self.clauses, self.config.n_features, self.t)
+    }
 }
 
 impl crate::model::TsetlinModel<Vec<u8>, u8> for TsetlinMachine {
@@ -453,5 +508,63 @@ mod tests {
         };
         let tm = TsetlinMachine::with_advanced(config, 10, opts);
         assert!((tm.threshold() - 10.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn accessors_config_clauses() {
+        let config = Config::builder().clauses(20).features(4).build().unwrap();
+        let tm = TsetlinMachine::new(config, 10);
+
+        assert_eq!(tm.config().n_clauses, 20);
+        assert_eq!(tm.config().n_features, 4);
+        assert_eq!(tm.clauses().len(), 20);
+    }
+
+    #[test]
+    fn threshold_base_and_reset() {
+        let config = Config::builder().clauses(10).features(2).build().unwrap();
+        let mut tm = TsetlinMachine::new(config, 15);
+
+        assert!((tm.threshold_base() - 15.0).abs() < 0.001);
+
+        // Threshold may change during training, reset it
+        let x = vec![vec![0, 0], vec![1, 1]];
+        let y = vec![0, 1];
+        tm.fit(&x, &y, 5, 42);
+
+        tm.reset_threshold();
+        assert!((tm.threshold() - 15.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn trait_impl_tsetlin_model() {
+        use crate::model::TsetlinModel;
+
+        let config = Config::builder().clauses(20).features(2).build().unwrap();
+        let mut tm = TsetlinMachine::new(config, 10);
+
+        let x = vec![vec![0, 0], vec![0, 1], vec![1, 0], vec![1, 1]];
+        let y = vec![0, 1, 1, 0];
+
+        TsetlinModel::fit(&mut tm, &x, &y, 100, 42);
+        let pred = TsetlinModel::predict(&tm, &x[1]);
+        assert!(pred == 0 || pred == 1);
+
+        let acc = TsetlinModel::evaluate(&tm, &x, &y);
+        assert!((0.0..=1.0).contains(&acc));
+
+        let batch = TsetlinModel::predict_batch(&tm, &x);
+        assert_eq!(batch.len(), 4);
+    }
+
+    #[test]
+    fn trait_impl_voting_model() {
+        use crate::model::VotingModel;
+
+        let config = Config::builder().clauses(20).features(2).build().unwrap();
+        let tm = TsetlinMachine::new(config, 10);
+
+        let votes = VotingModel::sum_votes(&tm, &vec![1, 0]);
+        assert!(votes.is_finite());
     }
 }

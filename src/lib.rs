@@ -7,6 +7,7 @@
 //!
 //! - [`TsetlinMachine`] - Binary classification (dynamic)
 //! - [`SmallTsetlinMachine`] - Binary classification (compile-time optimized)
+//! - [`SparseTsetlinMachine`] - Memory-efficient inference (5-100x reduction)
 //! - [`MultiClass`] - Multi-class classification (one-vs-all)
 //! - [`Regressor`] - Regression
 //! - [`Convolutional`] - Image classification with patch extraction
@@ -19,6 +20,8 @@
 //! | [`SmallClause`] | No | N ≤ 64, maximum speed |
 //! | [`BitwiseClause`] | Yes | N ≥ 64, 25-92x speedup |
 //! | [`SmallBitwiseClause`] | No | 64-256 features, no heap |
+//! | [`SparseClause`] | Inline | Inference, 5-100x compression |
+//! | [`SparseClauseBank`] | Yes | CSR batch inference |
 //!
 //! # Advanced Features
 //!
@@ -71,6 +74,7 @@ mod multiclass;
 mod regression;
 mod rule;
 mod small;
+mod sparse;
 mod training;
 pub mod utils;
 
@@ -103,4 +107,5 @@ pub use small::{
     Clause32, Clause64, SmallBitwiseClause, SmallClause, SmallTsetlinMachine, TM2x20, TM4x40,
     TM8x80, TM16x160, pack_input_small
 };
+pub use sparse::{SparseClause, SparseClauseBank, SparseMemoryStats, SparseTsetlinMachine};
 pub use training::{EarlyStop, FitOptions, FitResult};

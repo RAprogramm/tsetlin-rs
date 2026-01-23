@@ -125,4 +125,37 @@ mod tests {
         assert_eq!(rule.polarity, -1);
         assert_eq!(rule.complexity(), 2);
     }
+
+    #[test]
+    fn rule_display_empty() {
+        let clause = Clause::new(3, 100, 1);
+        let rule = Rule::from_clause(&clause);
+        assert_eq!(format!("{}", rule), "TRUE");
+    }
+
+    #[test]
+    fn rule_display_positive() {
+        let mut clause = Clause::new(4, 50, 1);
+        for _ in 0..100 {
+            clause.automata_mut()[0].increment(); // include x[0]
+            clause.automata_mut()[5].increment(); // negate x[2]
+        }
+        let rule = Rule::from_clause(&clause);
+        let display = format!("{}", rule);
+        assert!(display.contains("+"));
+        assert!(display.contains("x[0]"));
+        assert!(display.contains("NOT x[2]"));
+    }
+
+    #[test]
+    fn rule_display_negative() {
+        let mut clause = Clause::new(4, 50, -1);
+        for _ in 0..100 {
+            clause.automata_mut()[2].increment(); // include x[1]
+        }
+        let rule = Rule::from_clause(&clause);
+        let display = format!("{}", rule);
+        assert!(display.contains("-"));
+        assert!(display.contains("x[1]"));
+    }
 }

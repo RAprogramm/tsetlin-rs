@@ -136,4 +136,64 @@ mod tests {
         assert!(clause.automata()[2].action());
         assert!(clause.automata()[5].action());
     }
+
+    #[test]
+    fn type_ia_not_firing() {
+        // When not firing, type_ia should delegate to type_i
+        let mut clause = Clause::new(3, 100, 1);
+        let mut rng = rng_from_seed(42);
+
+        for _ in 0..100 {
+            type_ia(&mut clause, &[1, 0, 1], false, 3.0, &mut rng);
+        }
+
+        // Should weaken all automata (same behavior as type_i not firing)
+        assert!(clause.automata().iter().any(|a| a.state() < 100));
+    }
+
+    #[test]
+    fn type_ia_firing_always_strengthens() {
+        // When firing, type_ia always strengthens matching literals
+        let mut clause = Clause::new(3, 50, 1);
+        let mut rng = rng_from_seed(42);
+
+        for _ in 0..100 {
+            type_ia(&mut clause, &[1, 0, 1], true, 3.0, &mut rng);
+        }
+
+        // For x[0]=1: always strengthen include[0] (automata[0])
+        assert!(clause.automata()[0].action());
+        // For x[1]=0: always strengthen negated[1] (automata[3])
+        assert!(clause.automata()[3].action());
+        // For x[2]=1: always strengthen include[2] (automata[4])
+        assert!(clause.automata()[4].action());
+    }
+
+    #[test]
+    fn type_ia_weakens_with_probability() {
+        // Weakening should still happen with probability 1/s
+        let mut clause = Clause::new(3, 100, 1);
+        let mut rng = rng_from_seed(42);
+
+        // First activate the literals
+        for _ in 0..150 {
+            clause.automata_mut()[1].increment(); // negated[0]
+            clause.automata_mut()[2].increment(); // include[1]
+            clause.automata_mut()[5].increment(); // negated[2]
+        }
+
+        // Now apply type_ia with x=[1,0,1]
+        for _ in 0..300 {
+            type_ia(&mut clause, &[1, 0, 1], true, 3.0, &mut rng);
+        }
+
+        // negated[0] (automata[1]) should have decreased (x[0]=1 -> weaken negated)
+        // include[1] (automata[2]) should have decreased (x[1]=0 -> weaken include)
+        // negated[2] (automata[5]) should have decreased (x[2]=1 -> weaken negated)
+        // At least some should be below their initial high state
+        let weakened = [1, 2, 5]
+            .iter()
+            .any(|&i| clause.automata()[i].state() < 200);
+        assert!(weakened);
+    }
 }

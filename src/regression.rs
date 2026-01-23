@@ -134,4 +134,65 @@ mod tests {
 
         assert!((-10..=10).contains(&p));
     }
+
+    #[test]
+    fn sum_votes_returns_finite() {
+        let config = Config::builder().clauses(20).features(4).build().unwrap();
+        let tm = Regressor::new(config, 10);
+        let votes = tm.sum_votes(&[1, 0, 1, 0]);
+        assert!(votes.is_finite());
+    }
+
+    #[test]
+    fn train_one_modifies_state() {
+        let config = Config::builder().clauses(20).features(4).build().unwrap();
+        let mut tm = Regressor::new(config, 10);
+        let mut rng = rng_from_seed(42);
+
+        // Train with positive error (y > prediction)
+        tm.train_one(&[1, 1, 0, 0], 5, &mut rng);
+
+        // Train with negative error (y < prediction)
+        tm.train_one(&[0, 0, 1, 1], -5, &mut rng);
+
+        // Should still predict valid values
+        let p = tm.predict(&[1, 0, 1, 0]);
+        assert!((-10..=10).contains(&p));
+    }
+
+    #[test]
+    fn fit_reduces_mae() {
+        let config = Config::builder().clauses(40).features(4).build().unwrap();
+        let mut tm = Regressor::new(config, 10);
+
+        // Simple regression pattern
+        let x = vec![
+            vec![1, 0, 0, 0],
+            vec![0, 1, 0, 0],
+            vec![0, 0, 1, 0],
+            vec![0, 0, 0, 1],
+        ];
+        let y = vec![5, 3, -3, -5];
+
+        tm.fit(&x, &y, 100, 42);
+
+        // MAE should be within reasonable bounds
+        let mae = tm.mae(&x, &y);
+        assert!(mae >= 0.0);
+        assert!(mae <= 20.0);
+    }
+
+    #[test]
+    fn mae_zero_for_perfect_predictions() {
+        let config = Config::builder().clauses(20).features(4).build().unwrap();
+        let tm = Regressor::new(config, 10);
+
+        // Get current predictions
+        let x = vec![vec![1, 0, 1, 0], vec![0, 1, 0, 1]];
+        let y: Vec<i32> = x.iter().map(|xi| tm.predict(xi)).collect();
+
+        // MAE should be 0 when y matches predictions
+        let mae = tm.mae(&x, &y);
+        assert!((mae - 0.0).abs() < 0.001);
+    }
 }
