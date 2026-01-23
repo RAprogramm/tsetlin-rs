@@ -22,6 +22,7 @@
 
 | Change | Author | Branch | Ref |
 |--------|--------|--------|-----|
+| professional changelog with Keep a Changelog format | [@RAprogramm](https://github.com/RAprogramm) | `main` | [`9df320e`](https://github.com/RAprogramm/tsetlin-rs/commit/9df320eedac67d21ba3617b2ceb03c326fd10901) |
 | Extract release notes from CHANGELOG.md | [@RAprogramm](https://github.com/RAprogramm) | `main` | [`dea324d`](https://github.com/RAprogramm/tsetlin-rs/commit/dea324d) |
 | Use cargo metadata for version extraction | [@RAprogramm](https://github.com/RAprogramm) | `main` | [`8317560`](https://github.com/RAprogramm/tsetlin-rs/commit/8317560) |
 
