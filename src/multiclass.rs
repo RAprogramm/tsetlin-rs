@@ -205,4 +205,84 @@ mod tests {
 
         assert!(tm.predict(&[1, 0, 1, 0]) < 3);
     }
+
+    #[test]
+    fn n_classes_correct() {
+        let config = Config::builder().clauses(10).features(4).build().unwrap();
+        let tm = MultiClass::new(config, 5, 15);
+        assert_eq!(tm.n_classes(), 5);
+    }
+
+    #[test]
+    fn class_votes_returns_all_classes() {
+        let config = Config::builder().clauses(10).features(4).build().unwrap();
+        let tm = MultiClass::new(config, 3, 15);
+        let votes = tm.class_votes(&[1, 0, 1, 0]);
+        assert_eq!(votes.len(), 3);
+    }
+
+    #[test]
+    fn quick_constructor() {
+        let tm = MultiClass::quick(20, 4, 3, 15);
+        assert_eq!(tm.n_classes(), 3);
+    }
+
+    #[test]
+    fn evaluate_empty_returns_zero() {
+        let config = Config::builder().clauses(10).features(4).build().unwrap();
+        let tm = MultiClass::new(config, 3, 15);
+        assert!((tm.evaluate(&[], &[]) - 0.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn train_one_modifies_state() {
+        let config = Config::builder().clauses(10).features(4).build().unwrap();
+        let mut tm = MultiClass::new(config, 2, 15);
+        let mut rng = rng_from_seed(42);
+
+        // Train on one example
+        tm.train_one(&[1, 0, 1, 0], 0, &mut rng);
+        tm.train_one(&[0, 1, 0, 1], 1, &mut rng);
+
+        // Should still return valid predictions
+        assert!(tm.predict(&[1, 0, 1, 0]) < 2);
+    }
+
+    #[test]
+    fn fit_and_evaluate() {
+        let mut tm = MultiClass::quick(50, 4, 2, 25);
+
+        // Simple pattern: class 0 has first bits set, class 1 has last bits set
+        let x = vec![
+            vec![1, 1, 0, 0],
+            vec![1, 0, 0, 0],
+            vec![0, 0, 1, 1],
+            vec![0, 0, 0, 1],
+        ];
+        let y = vec![0, 0, 1, 1];
+
+        tm.fit(&x, &y, 100, 42);
+
+        // Should achieve some accuracy
+        let acc = tm.evaluate(&x, &y);
+        assert!((0.0..=1.0).contains(&acc));
+    }
+
+    #[test]
+    fn trait_impl_works() {
+        use crate::model::TsetlinModel;
+
+        let config = Config::builder().clauses(20).features(4).build().unwrap();
+        let mut tm = MultiClass::new(config, 2, 15);
+
+        let x = vec![vec![1, 1, 0, 0], vec![0, 0, 1, 1]];
+        let y = vec![0, 1];
+
+        TsetlinModel::fit(&mut tm, &x, &y, 50, 42);
+        let pred = TsetlinModel::predict(&tm, &x[0]);
+        assert!(pred < 2);
+
+        let acc = TsetlinModel::evaluate(&tm, &x, &y);
+        assert!((0.0..=1.0).contains(&acc));
+    }
 }

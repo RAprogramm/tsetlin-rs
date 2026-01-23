@@ -998,4 +998,183 @@ mod tests {
         let votes = sparse.sum_votes_packed(&[packed]);
         assert!((votes - 0.0).abs() < 0.001); // Both fire: +1 - 1 = 0
     }
+
+    #[test]
+    fn sparse_clause_accessors() {
+        let sparse = SparseClause::new(&[1, 3, 5], &[2, 4], 2.5, -1);
+
+        assert!((sparse.weight() - 2.5).abs() < 0.001);
+        assert_eq!(sparse.include_indices(), &[1, 3, 5]);
+        assert_eq!(sparse.negated_indices(), &[2, 4]);
+        assert_eq!(sparse.polarity(), -1);
+    }
+
+    #[test]
+    fn sparse_clause_evaluate_checked() {
+        let sparse = SparseClause::new(&[0, 2], &[1], 1.0, 1);
+
+        // Normal case: should fire
+        assert!(sparse.evaluate_checked(&[1, 0, 1, 0]));
+
+        // Include violation
+        assert!(!sparse.evaluate_checked(&[0, 0, 1, 0]));
+
+        // Negated violation
+        assert!(!sparse.evaluate_checked(&[1, 1, 1, 0]));
+
+        // Out of bounds index treated as 0
+        let sparse_oob = SparseClause::new(&[100], &[], 1.0, 1);
+        assert!(!sparse_oob.evaluate_checked(&[1, 1])); // idx 100 doesn't exist
+
+        let sparse_oob_neg = SparseClause::new(&[], &[100], 1.0, 1);
+        assert!(sparse_oob_neg.evaluate_checked(&[1, 1])); // negated: missing = 0 = ok
+    }
+
+    #[test]
+    fn sparse_memory_stats_edge_cases() {
+        // Empty stats
+        let stats = SparseMemoryStats {
+            include_data:    0,
+            include_offsets: 0,
+            negated_data:    0,
+            negated_offsets: 0,
+            weights:         0,
+            polarities:      0,
+            total_literals:  0,
+            n_clauses:       0,
+            n_features:      100
+        };
+
+        assert!((stats.avg_literals_per_clause() - 0.0).abs() < 0.001);
+        assert!((stats.sparsity() - 0.0).abs() < 0.001);
+        assert!((stats.compression_ratio(100) - 0.0).abs() < 0.001);
+        assert_eq!(stats.total(), 0);
+
+        // Zero features
+        let stats_zero_feat = SparseMemoryStats {
+            include_data:    10,
+            include_offsets: 8,
+            negated_data:    10,
+            negated_offsets: 8,
+            weights:         8,
+            polarities:      2,
+            total_literals:  5,
+            n_clauses:       2,
+            n_features:      0
+        };
+        assert!((stats_zero_feat.sparsity() - 0.0).abs() < 0.001);
+        assert_eq!(stats_zero_feat.total(), 46);
+    }
+
+    #[test]
+    fn sparse_tm_from_clauses() {
+        let clauses = vec![Clause::new(4, 100, 1), Clause::new(4, 100, -1)];
+
+        let stm = SparseTsetlinMachine::from_clauses(&clauses, 4, 10.0);
+        assert_eq!(stm.n_clauses(), 2);
+        assert_eq!(stm.n_features(), 4);
+        assert!((stm.threshold() - 10.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn sparse_tm_new_and_accessors() {
+        let clauses = vec![
+            SparseClause::new(&[0], &[], 1.0, 1),
+            SparseClause::new(&[], &[1], 1.0, -1),
+        ];
+        let bank = SparseClauseBank::from_clauses(&clauses, 4);
+        let stm = SparseTsetlinMachine::new(bank, 5.0);
+
+        assert_eq!(stm.n_clauses(), 2);
+        assert_eq!(stm.n_features(), 4);
+        assert!((stm.threshold() - 5.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn sparse_tm_predict() {
+        let clauses = vec![
+            SparseClause::new(&[0], &[], 1.0, 1),  // x[0]=1 -> +1
+            SparseClause::new(&[], &[0], 1.0, -1), // x[0]=0 -> -1
+        ];
+        let bank = SparseClauseBank::from_clauses(&clauses, 4);
+        let stm = SparseTsetlinMachine::new(bank, 5.0);
+
+        // x[0]=1: +1 vote -> positive -> class 1
+        assert_eq!(stm.predict(&[1, 0, 0, 0]), 1);
+
+        // x[0]=0: -1 vote -> negative -> class 0
+        assert_eq!(stm.predict(&[0, 0, 0, 0]), 0);
+    }
+
+    #[test]
+    fn sparse_tm_predict_packed() {
+        let clauses = vec![
+            SparseClause::new(&[0], &[], 2.0, 1),  // x[0]=1 -> +2
+            SparseClause::new(&[], &[0], 1.0, -1), // x[0]=0 -> -1
+        ];
+        let bank = SparseClauseBank::from_clauses(&clauses, 64);
+        let stm = SparseTsetlinMachine::new(bank, 5.0);
+
+        // Packed bit 0 set: +2 votes
+        assert_eq!(stm.predict_packed(&[1u64]), 1);
+
+        // Packed bit 0 clear: -1 vote
+        assert_eq!(stm.predict_packed(&[0u64]), 0);
+    }
+
+    #[test]
+    fn sparse_tm_predict_batch() {
+        let clauses = vec![
+            SparseClause::new(&[0], &[], 1.0, 1),
+            SparseClause::new(&[], &[0], 1.0, -1),
+        ];
+        let bank = SparseClauseBank::from_clauses(&clauses, 2);
+        let stm = SparseTsetlinMachine::new(bank, 5.0);
+
+        let xs = vec![vec![1, 0], vec![0, 0], vec![1, 1], vec![0, 1]];
+        let preds = stm.predict_batch(&xs);
+
+        assert_eq!(preds, vec![1, 0, 1, 0]);
+    }
+
+    #[test]
+    fn sparse_tm_evaluate() {
+        let clauses = vec![
+            SparseClause::new(&[0], &[], 1.0, 1),
+            SparseClause::new(&[], &[0], 1.0, -1),
+        ];
+        let bank = SparseClauseBank::from_clauses(&clauses, 2);
+        let stm = SparseTsetlinMachine::new(bank, 5.0);
+
+        let xs = vec![vec![1, 0], vec![0, 0], vec![1, 1], vec![0, 1]];
+        let ys = vec![1, 0, 1, 0];
+
+        // 100% accuracy expected
+        assert!((stm.evaluate(&xs, &ys) - 1.0).abs() < 0.001);
+
+        // Wrong labels: 0% accuracy
+        let wrong_ys = vec![0, 1, 0, 1];
+        assert!((stm.evaluate(&xs, &wrong_ys) - 0.0).abs() < 0.001);
+
+        // Empty input
+        assert!((stm.evaluate(&[], &[]) - 0.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn sparse_tm_memory_and_compression() {
+        let clauses = vec![
+            SparseClause::new(&[0, 1], &[2], 1.0, 1),
+            SparseClause::new(&[3], &[4, 5], 1.0, -1),
+        ];
+        let bank = SparseClauseBank::from_clauses(&clauses, 100);
+        let stm = SparseTsetlinMachine::new(bank, 5.0);
+
+        let stats = stm.memory_stats();
+        assert_eq!(stats.total_literals, 6);
+        assert_eq!(stats.n_clauses, 2);
+
+        // High compression ratio expected
+        let ratio = stm.compression_ratio();
+        assert!(ratio > 10.0);
+    }
 }

@@ -52,6 +52,10 @@ proptest = "1"
 name = "benchmarks"
 harness = false
 
+[[bench]]
+name = "sparse_benchmarks"
+harness = false
+
 [[example]]
 name = "xor"
 

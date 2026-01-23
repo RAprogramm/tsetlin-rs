@@ -57,3 +57,35 @@ pub trait VotingModel<X>: TsetlinModel<X, u8> {
     /// Returns raw vote sum for input.
     fn sum_votes(&self, x: &X) -> f32;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct MockModel;
+
+    impl TsetlinModel<u8, u8> for MockModel {
+        fn fit(&mut self, _x: &[u8], _y: &[u8], _epochs: usize, _seed: u64) {}
+
+        fn predict(&self, x: &u8) -> u8 {
+            *x % 2
+        }
+
+        fn evaluate(&self, x: &[u8], y: &[u8]) -> f32 {
+            let correct = x
+                .iter()
+                .zip(y)
+                .filter(|(xi, yi)| self.predict(xi) == **yi)
+                .count();
+            correct as f32 / x.len() as f32
+        }
+    }
+
+    #[test]
+    fn predict_batch_default_impl() {
+        let model = MockModel;
+        let xs = vec![0, 1, 2, 3, 4];
+        let preds = model.predict_batch(&xs);
+        assert_eq!(preds, vec![0, 1, 0, 1, 0]);
+    }
+}
