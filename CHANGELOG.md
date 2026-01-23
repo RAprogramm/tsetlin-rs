@@ -2,6 +2,11 @@
 
 ---
 
+## v0.3.0
+
+- [`8d07f86`](https://github.com/RAprogramm/tsetlin-rs/commit/8d07f868c4b9c663931d1617b79fc4c64ec8a6db) 2 ([#23](https://github.com/RAprogramm/tsetlin-rs/issues/23))
+  [<img src="https://avatars.githubusercontent.com/u/70325462?v=4" width="20" height="20" style="border-radius:50%" title="RAprogramm"/>](https://github.com/RAprogramm)
+
 ## v0.2.2
 
 - [`e338e38`](https://github.com/RAprogramm/tsetlin-rs/commit/e338e38b7b7a7d3a9c3747d39dcf2a2ed50e6cf3) 🐛 fix: changelog version detection per commit
