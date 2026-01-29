@@ -111,14 +111,14 @@ The Tsetlin Machine is a machine learning algorithm based on propositional logic
 
 ```toml
 [dependencies]
-tsetlin-rs = "0.2"
+tsetlin-rs = "0.3"
 ```
 
 With parallel training and serialization:
 
 ```toml
 [dependencies]
-tsetlin-rs = { version = "0.2", features = ["parallel", "serde"] }
+tsetlin-rs = { version = "0.3", features = ["parallel", "serde"] }
 ```
 
 ### Feature Flags
@@ -129,6 +129,7 @@ tsetlin-rs = { version = "0.2", features = ["parallel", "serde"] }
 | `parallel` | No | Lock-free parallel training via rayon |
 | `serde` | No | Serialization/deserialization |
 | `simd` | No | SIMD optimization (requires nightly) |
+| `gpu` | No | GPU acceleration foundation (backend traits) |
 
 <div align="right"><a href="#top">Back to top</a></div>
 
@@ -193,6 +194,10 @@ let mut tm = TsetlinMachine::new(config, 15);
 
 tm.fit(&x_train, &y_train, 100, 42);
 let prediction = tm.predict(&x_test[0]);  // 0 or 1
+
+// Online learning (incremental updates)
+tm.partial_fit(&new_sample, label, 123);
+tm.partial_fit_batch(&new_samples, &labels, 456, true);
 ```
 
 ### Multi-class Classification — `MultiClass`
@@ -794,6 +799,30 @@ tm.fit(&x_train, &y_train, 100, 42);
 | Type II (256 features) | 426 ns | **330 ns** | **~1.3x** |
 | Type I (1024 features) | 5.05 µs | 5.25 µs | ~1x |
 
+### Online Learning (partial_fit)
+
+100 clauses, 64 features, 100 samples:
+
+| Method | Time | Use Case |
+|--------|------|----------|
+| `partial_fit` (single) | 548 µs | Stream processing |
+| `partial_fit_batch` | 547 µs | Mini-batch updates |
+| `fit` (1 epoch) | 1.15 ms | Full retraining |
+
+**Note:** `partial_fit` provides ~2x faster incremental updates compared to full `fit` with equivalent samples.
+
+### Clause Filter
+
+100 clauses, 64 features:
+
+| Operation | Time | Description |
+|-----------|------|-------------|
+| `candidates()` | 1.03 µs | Find potentially firing clauses |
+| `sum_votes` (unfiltered) | 5.69 µs | Evaluate all clauses |
+| `sum_votes_filtered` | 6.04 µs | Evaluate with filter |
+
+**Note:** Filter overhead is minimal (~6%). Benefits appear with sparse data where filter rejects >50% of clauses.
+
 ### Run Benchmarks
 
 ```bash
@@ -1046,6 +1075,14 @@ fn train_epoch(tm: &mut TsetlinMachine, X: &[Vec<u8>], Y: &[u8], T: f32, s: f32)
 |------|-------------|
 | `LocalTally` | Cache-padded atomic accumulator |
 | `ParallelBatch` | Training batch with tallies |
+| `TrainingArena` | Reusable memory pool for training |
+
+### Optimization
+
+| Type | Description |
+|------|-------------|
+| `ClauseFilter` | Bloom-like filter for fast clause rejection |
+| `ClauseFilterStats` | Filter statistics (sparsity, rejection rate) |
 
 ### Configuration
 

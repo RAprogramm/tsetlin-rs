@@ -4,8 +4,8 @@ use core::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use tsetlin_rs::{
-    BitPlaneBank, BitwiseClause, Clause, Clause16, ClauseBank, Config, MultiClass, SmallClause,
-    TsetlinMachine, feedback, pack_input, utils::rng_from_seed
+    BitPlaneBank, BitwiseClause, Clause, Clause16, ClauseBank, ClauseFilter, Config, MultiClass,
+    SmallClause, TsetlinMachine, feedback, pack_input, utils::rng_from_seed
 };
 
 fn bench_clause_evaluate(c: &mut Criterion) {
@@ -418,6 +418,121 @@ fn bench_evaluate_all_bitmap(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_partial_fit(c: &mut Criterion) {
+    let mut group = c.benchmark_group("partial_fit");
+
+    for n_samples in [10, 50, 100] {
+        let n_features = 64;
+        let n_clauses = 50;
+
+        let samples: Vec<(Vec<u8>, u8)> = (0..n_samples)
+            .map(|i| {
+                let x: Vec<u8> = (0..n_features).map(|j| ((i + j) % 2) as u8).collect();
+                let y = (i % 2) as u8;
+                (x, y)
+            })
+            .collect();
+
+        // partial_fit (one sample at a time)
+        group.bench_with_input(BenchmarkId::new("single", n_samples), &n_samples, |b, _| {
+            b.iter(|| {
+                let config = Config::builder()
+                    .clauses(n_clauses)
+                    .features(n_features)
+                    .build()
+                    .unwrap();
+                let mut tm = TsetlinMachine::new(config, 15);
+                for (i, (x, y)) in samples.iter().enumerate() {
+                    tm.partial_fit(black_box(x), *y, i as u64);
+                }
+            });
+        });
+
+        // partial_fit_batch
+        let xs: Vec<Vec<u8>> = samples.iter().map(|(x, _)| x.clone()).collect();
+        let ys: Vec<u8> = samples.iter().map(|(_, y)| *y).collect();
+
+        group.bench_with_input(BenchmarkId::new("batch", n_samples), &n_samples, |b, _| {
+            b.iter(|| {
+                let config = Config::builder()
+                    .clauses(n_clauses)
+                    .features(n_features)
+                    .build()
+                    .unwrap();
+                let mut tm = TsetlinMachine::new(config, 15);
+                tm.partial_fit_batch(black_box(&xs), black_box(&ys), 42, false);
+            });
+        });
+
+        // fit (baseline)
+        group.bench_with_input(
+            BenchmarkId::new("fit_1_epoch", n_samples),
+            &n_samples,
+            |b, _| {
+                b.iter(|| {
+                    let config = Config::builder()
+                        .clauses(n_clauses)
+                        .features(n_features)
+                        .build()
+                        .unwrap();
+                    let mut tm = TsetlinMachine::new(config, 15);
+                    tm.fit(black_box(&xs), black_box(&ys), 1, 42);
+                });
+            }
+        );
+    }
+
+    group.finish();
+}
+
+fn bench_clause_filter(c: &mut Criterion) {
+    let mut group = c.benchmark_group("clause_filter");
+
+    for n_clauses in [50, 100, 200] {
+        let n_features = 64;
+        let x: Vec<u8> = (0..n_features).map(|i| (i % 2) as u8).collect();
+
+        // Create and train a bank
+        let mut bank = ClauseBank::new(n_clauses, n_features, 100);
+        let mut rng = rng_from_seed(42);
+        for _ in 0..100 {
+            bank.train_sample(&x, 1, 15.0, 3.9, &mut rng);
+        }
+
+        // Build filter
+        let filter = ClauseFilter::from_bank(&bank);
+
+        // sum_votes without filter (baseline)
+        group.bench_with_input(
+            BenchmarkId::new("sum_votes_unfiltered", n_clauses),
+            &n_clauses,
+            |b, _| {
+                b.iter(|| black_box(bank.sum_votes(black_box(&x))));
+            }
+        );
+
+        // sum_votes with filter
+        group.bench_with_input(
+            BenchmarkId::new("sum_votes_filtered", n_clauses),
+            &n_clauses,
+            |b, _| {
+                b.iter(|| black_box(filter.sum_votes_filtered(&bank, black_box(&x))));
+            }
+        );
+
+        // candidates() only
+        group.bench_with_input(
+            BenchmarkId::new("candidates", n_clauses),
+            &n_clauses,
+            |b, _| {
+                b.iter(|| black_box(filter.candidates(black_box(&x))));
+            }
+        );
+    }
+
+    group.finish();
+}
+
 #[cfg(feature = "parallel")]
 fn bench_parallel_training(c: &mut Criterion) {
     use tsetlin_rs::ParallelBatch;
@@ -497,6 +612,8 @@ criterion_group!(
     bench_bitplane_increment,
     bench_train_sample_bitmap,
     bench_evaluate_all_bitmap,
+    bench_partial_fit,
+    bench_clause_filter,
     bench_parallel_training
 );
 
@@ -516,7 +633,9 @@ criterion_group!(
     bench_bitplane_feedback,
     bench_bitplane_increment,
     bench_train_sample_bitmap,
-    bench_evaluate_all_bitmap
+    bench_evaluate_all_bitmap,
+    bench_partial_fit,
+    bench_clause_filter
 );
 
 criterion_main!(benches);
