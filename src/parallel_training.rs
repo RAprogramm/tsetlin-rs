@@ -35,6 +35,13 @@
 //! - **Constant-time scaling** for 20-7000 clauses
 //! - **No accuracy loss** from working on stale data
 //!
+//! # Arena Allocator
+//!
+//! For high-throughput training, [`TrainingArena`] provides memory reuse:
+//! - Pre-allocated tally pool avoids per-epoch allocations
+//! - Reusable index buffer eliminates shuffle allocation overhead
+//! - Reduces allocator contention in parallel code
+//!
 //! # References
 //!
 //! - [Massively Parallel TM (ICML 2021)](https://arxiv.org/abs/2009.04861)
@@ -138,6 +145,185 @@ impl LocalTally {
 impl Default for LocalTally {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Arena allocator for training memory reuse.
+///
+/// Pre-allocates memory for training operations to avoid repeated allocations
+/// during epoch iterations. Particularly beneficial for large datasets where
+/// per-epoch allocation overhead becomes significant.
+///
+/// # Memory Layout
+///
+/// ```text
+/// TrainingArena
+/// ├── tallies: Vec<LocalTally>   (128 bytes × n_samples, cache-aligned)
+/// ├── indices: Vec<usize>        (8 bytes × n_samples)
+/// └── bitmaps: Vec<Vec<u64>>     (8 bytes × bitmap_words × n_samples)
+/// ```
+///
+/// # Example
+///
+/// ```
+/// use tsetlin_rs::parallel_training::TrainingArena;
+///
+/// // Create arena for 1000 samples, 100 clauses
+/// let mut arena = TrainingArena::new(1000, 100);
+///
+/// // Reuse across epochs
+/// for epoch in 0..100 {
+///     arena.reset();
+///     // ... training with arena.batch(), arena.indices() ...
+/// }
+/// ```
+#[derive(Debug)]
+pub struct TrainingArena {
+    /// Pre-allocated vote tallies (one per sample).
+    tallies:   Vec<LocalTally>,
+    /// Reusable index buffer for shuffling.
+    indices:   Vec<usize>,
+    /// Pre-allocated firing bitmaps (one per sample).
+    bitmaps:   Vec<Vec<u64>>,
+    /// Number of samples this arena supports.
+    n_samples: usize,
+    /// Number of clauses (for bitmap sizing).
+    n_clauses: usize
+}
+
+impl TrainingArena {
+    /// Creates a new arena for the given dataset size.
+    ///
+    /// # Arguments
+    ///
+    /// * `n_samples` - Number of training samples
+    /// * `n_clauses` - Number of clauses (for bitmap allocation)
+    #[must_use]
+    pub fn new(n_samples: usize, n_clauses: usize) -> Self {
+        let bitmap_words = n_clauses.div_ceil(64);
+        Self {
+            tallies: (0..n_samples).map(|_| LocalTally::new()).collect(),
+            indices: (0..n_samples).collect(),
+            bitmaps: (0..n_samples).map(|_| vec![0u64; bitmap_words]).collect(),
+            n_samples,
+            n_clauses
+        }
+    }
+
+    /// Returns the number of samples this arena supports.
+    #[inline]
+    #[must_use]
+    pub fn n_samples(&self) -> usize {
+        self.n_samples
+    }
+
+    /// Returns the number of clauses this arena supports.
+    #[inline]
+    #[must_use]
+    pub fn n_clauses(&self) -> usize {
+        self.n_clauses
+    }
+
+    /// Resets all tallies to zero for a new epoch.
+    pub fn reset_tallies(&self) {
+        self.tallies.par_iter().for_each(LocalTally::reset);
+    }
+
+    /// Resets all bitmaps to zero.
+    pub fn reset_bitmaps(&mut self) {
+        self.bitmaps.par_iter_mut().for_each(|bitmap| {
+            bitmap.iter_mut().for_each(|word| *word = 0);
+        });
+    }
+
+    /// Full reset for a new epoch.
+    pub fn reset(&mut self) {
+        self.reset_tallies();
+        self.reset_bitmaps();
+    }
+
+    /// Returns the tally for a specific sample.
+    #[inline]
+    #[must_use]
+    pub fn tally(&self, idx: usize) -> &LocalTally {
+        &self.tallies[idx]
+    }
+
+    /// Returns the mutable index buffer for shuffling.
+    #[inline]
+    pub fn indices_mut(&mut self) -> &mut [usize] {
+        &mut self.indices
+    }
+
+    /// Returns the index buffer.
+    #[inline]
+    #[must_use]
+    pub fn indices(&self) -> &[usize] {
+        &self.indices
+    }
+
+    /// Returns the bitmap for a specific sample.
+    #[inline]
+    #[must_use]
+    pub fn bitmap(&self, idx: usize) -> &[u64] {
+        &self.bitmaps[idx]
+    }
+
+    /// Returns the mutable bitmap for a specific sample.
+    #[inline]
+    pub fn bitmap_mut(&mut self, idx: usize) -> &mut [u64] {
+        &mut self.bitmaps[idx]
+    }
+
+    /// Returns all bitmaps.
+    #[inline]
+    #[must_use]
+    pub fn bitmaps(&self) -> &[Vec<u64>] {
+        &self.bitmaps
+    }
+
+    /// Returns all mutable bitmaps.
+    #[inline]
+    pub fn bitmaps_mut(&mut self) -> &mut [Vec<u64>] {
+        &mut self.bitmaps
+    }
+
+    /// Resizes the arena if needed for a different dataset size.
+    ///
+    /// Only reallocates if the new size exceeds current capacity.
+    pub fn ensure_capacity(&mut self, n_samples: usize, n_clauses: usize) {
+        let bitmap_words = n_clauses.div_ceil(64);
+
+        if n_samples > self.tallies.len() {
+            self.tallies
+                .extend((self.tallies.len()..n_samples).map(|_| LocalTally::new()));
+        }
+
+        if n_samples > self.indices.len() {
+            self.indices.extend(self.indices.len()..n_samples);
+        }
+
+        if n_samples > self.bitmaps.len() || n_clauses > self.n_clauses {
+            self.bitmaps
+                .resize_with(n_samples, || vec![0u64; bitmap_words]);
+            for bitmap in &mut self.bitmaps {
+                if bitmap.len() < bitmap_words {
+                    bitmap.resize(bitmap_words, 0);
+                }
+            }
+        }
+
+        self.n_samples = n_samples;
+        self.n_clauses = n_clauses;
+    }
+
+    /// Returns memory usage in bytes.
+    #[must_use]
+    pub fn memory_usage(&self) -> usize {
+        let tally_size = self.tallies.len() * core::mem::size_of::<LocalTally>();
+        let indices_size = self.indices.len() * core::mem::size_of::<usize>();
+        let bitmap_size: usize = self.bitmaps.iter().map(|b| b.len() * 8).sum();
+        tally_size + indices_size + bitmap_size
     }
 }
 
@@ -785,5 +971,91 @@ mod tests {
 
         // States should have changed
         assert_ne!(bank.states, initial_states);
+    }
+
+    #[test]
+    fn training_arena_creation() {
+        let arena = TrainingArena::new(100, 20);
+
+        assert_eq!(arena.n_samples(), 100);
+        assert_eq!(arena.n_clauses(), 20);
+        assert_eq!(arena.indices().len(), 100);
+    }
+
+    #[test]
+    fn training_arena_reset() {
+        let mut arena = TrainingArena::new(10, 8);
+
+        // Modify tallies
+        arena.tally(0).add_weighted(1, 1.5);
+        arena.tally(5).add_weighted(-1, 2.0);
+
+        // Modify bitmaps
+        arena.bitmaps_mut()[0][0] = 0xFF;
+
+        // Reset
+        arena.reset();
+
+        // Tallies should be zero
+        assert!((arena.tally(0).sum() - 0.0).abs() < 0.001);
+        assert!((arena.tally(5).sum() - 0.0).abs() < 0.001);
+
+        // Bitmaps should be zero
+        assert_eq!(arena.bitmap(0)[0], 0);
+    }
+
+    #[test]
+    fn training_arena_indices() {
+        let mut arena = TrainingArena::new(5, 4);
+
+        // Initial indices should be 0..5
+        assert_eq!(arena.indices(), &[0, 1, 2, 3, 4]);
+
+        // Modify indices (simulating shuffle)
+        let indices = arena.indices_mut();
+        indices.swap(0, 4);
+
+        assert_eq!(arena.indices(), &[4, 1, 2, 3, 0]);
+    }
+
+    #[test]
+    fn training_arena_ensure_capacity() {
+        let mut arena = TrainingArena::new(10, 8);
+
+        // Grow
+        arena.ensure_capacity(20, 16);
+        assert_eq!(arena.n_samples(), 20);
+        assert_eq!(arena.n_clauses(), 16);
+        assert_eq!(arena.indices().len(), 20);
+
+        // Shrinking parameters doesn't reallocate
+        arena.ensure_capacity(5, 4);
+        assert!(arena.indices().len() >= 5);
+    }
+
+    #[test]
+    fn training_arena_memory_usage() {
+        let arena = TrainingArena::new(100, 64);
+        let usage = arena.memory_usage();
+
+        // Should be non-zero and reasonable
+        assert!(usage > 0);
+        // Rough estimate: 100 tallies (128B each) + 100 indices (8B) + 100 bitmaps (8B)
+        assert!(usage >= 100 * 128 + 100 * 8 + 100 * 8);
+    }
+
+    #[test]
+    fn training_arena_bitmaps() {
+        let mut arena = TrainingArena::new(10, 128);
+
+        // 128 clauses = 2 bitmap words
+        assert_eq!(arena.bitmap(0).len(), 2);
+
+        // Set some bits
+        arena.bitmaps_mut()[0][0] = 1;
+        arena.bitmaps_mut()[0][1] = 1 << 63;
+
+        assert_eq!(arena.bitmap(0)[0], 1);
+        assert_eq!(arena.bitmap(0)[1], 1 << 63);
     }
 }

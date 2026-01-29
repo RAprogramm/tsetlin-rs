@@ -99,7 +99,7 @@ pub use error::{Error, Result};
 pub use model::{TsetlinModel, VotingModel};
 pub use multiclass::MultiClass;
 #[cfg(feature = "parallel")]
-pub use parallel_training::{LocalTally, ParallelBatch};
+pub use parallel_training::{LocalTally, ParallelBatch, TrainingArena};
 pub use regression::Regressor;
 pub use rule::Rule;
 pub use small::{
