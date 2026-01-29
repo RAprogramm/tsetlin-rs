@@ -7,6 +7,14 @@
 
 ---
 
+## [0.3.4] - 2026-01-29
+
+### Changed
+
+| Change | Author | Branch | Ref |
+|--------|--------|--------|-----|
+| add benchmark results for new features | [@RAprogramm](https://github.com/RAprogramm) | `main` | [`a47d7fc`](https://github.com/RAprogramm/tsetlin-rs/commit/a47d7fc7bbdfd9051a2706613b35b70292f41fdf) |
+
 ## [0.3.0] - 2026-01-23
 
 > [!IMPORTANT]
@@ -96,7 +104,8 @@
 
 ---
 
-[Unreleased]: https://github.com/RAprogramm/tsetlin-rs/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/RAprogramm/tsetlin-rs/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/RAprogramm/tsetlin-rs/compare/v0.3.0...v0.3.4
 [0.3.0]: https://github.com/RAprogramm/tsetlin-rs/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/RAprogramm/tsetlin-rs/compare/v0.1.0...v0.2.2
 [0.1.0]: https://github.com/RAprogramm/tsetlin-rs/releases/tag/v0.1.0
