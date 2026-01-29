@@ -178,6 +178,37 @@ impl MultiClass {
             .expect("invalid quick config");
         Self::new(config, n_classes, threshold)
     }
+
+    /// Trains on a single sample (online/incremental learning).
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - Single input sample (binary features)
+    /// * `y` - Class label (0 to n_classes-1)
+    /// * `seed` - Random seed for this update
+    #[inline]
+    pub fn partial_fit(&mut self, x: &[u8], y: usize, seed: u64) {
+        let mut rng = rng_from_seed(seed);
+        self.train_one(x, y, &mut rng);
+    }
+
+    /// Trains on a mini-batch of samples (online/incremental learning).
+    ///
+    /// # Arguments
+    ///
+    /// * `xs` - Batch of input samples
+    /// * `ys` - Batch of class labels
+    /// * `seed` - Random seed for this batch
+    pub fn partial_fit_batch(&mut self, xs: &[Vec<u8>], ys: &[usize], seed: u64) {
+        if xs.is_empty() || xs.len() != ys.len() {
+            return;
+        }
+
+        let mut rng = rng_from_seed(seed);
+        for (x, &y) in xs.iter().zip(ys) {
+            self.train_one(x, y, &mut rng);
+        }
+    }
 }
 
 impl crate::model::TsetlinModel<Vec<u8>, usize> for MultiClass {
@@ -284,5 +315,43 @@ mod tests {
 
         let acc = TsetlinModel::evaluate(&tm, &x, &y);
         assert!((0.0..=1.0).contains(&acc));
+    }
+
+    #[test]
+    fn partial_fit_single_sample() {
+        let mut tm = MultiClass::quick(20, 4, 3, 15);
+
+        tm.partial_fit(&[1, 1, 0, 0], 0, 42);
+        tm.partial_fit(&[0, 1, 1, 0], 1, 43);
+        tm.partial_fit(&[0, 0, 1, 1], 2, 44);
+
+        assert!(tm.predict(&[1, 1, 0, 0]) < 3);
+    }
+
+    #[test]
+    fn partial_fit_batch() {
+        let mut tm = MultiClass::quick(50, 4, 2, 25);
+
+        let x = vec![
+            vec![1, 1, 0, 0],
+            vec![1, 0, 0, 0],
+            vec![0, 0, 1, 1],
+            vec![0, 0, 0, 1],
+        ];
+        let y = vec![0, 0, 1, 1];
+
+        for epoch in 0..100 {
+            tm.partial_fit_batch(&x, &y, 42 + epoch);
+        }
+
+        let acc = tm.evaluate(&x, &y);
+        assert!((0.0..=1.0).contains(&acc));
+    }
+
+    #[test]
+    fn partial_fit_empty_batch() {
+        let mut tm = MultiClass::quick(10, 4, 2, 15);
+        tm.partial_fit_batch(&[], &[], 42);
+        assert_eq!(tm.n_classes(), 2);
     }
 }

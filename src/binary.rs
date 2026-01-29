@@ -435,6 +435,82 @@ impl TsetlinMachine {
     pub fn to_sparse(&self) -> SparseTsetlinMachine {
         SparseTsetlinMachine::from_clauses(&self.clauses, self.config.n_features, self.t)
     }
+
+    /// Trains on a single sample (online/incremental learning).
+    ///
+    /// Unlike `fit()`, this processes one sample without requiring the full
+    /// dataset in memory. Useful for streaming data or real-time learning.
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - Single input sample (binary features)
+    /// * `y` - Binary label (0 or 1)
+    /// * `seed` - Random seed for this update
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tsetlin_rs::{Config, TsetlinMachine};
+    ///
+    /// let config = Config::builder().clauses(20).features(2).build().unwrap();
+    /// let mut tm = TsetlinMachine::new(config, 10);
+    ///
+    /// // Stream samples one at a time
+    /// tm.partial_fit(&[0, 1], 1, 42);
+    /// tm.partial_fit(&[1, 0], 1, 43);
+    /// tm.partial_fit(&[0, 0], 0, 44);
+    /// ```
+    #[inline]
+    pub fn partial_fit(&mut self, x: &[u8], y: u8, seed: u64) {
+        let mut rng = rng_from_seed(seed);
+        self.train_one(x, y, &mut rng);
+    }
+
+    /// Trains on a mini-batch of samples (online/incremental learning).
+    ///
+    /// Processes multiple samples in sequence without requiring the full
+    /// dataset. Optionally updates weights after the batch.
+    ///
+    /// # Arguments
+    ///
+    /// * `xs` - Batch of input samples
+    /// * `ys` - Batch of binary labels
+    /// * `seed` - Random seed for this batch
+    /// * `update_weights` - Whether to update clause weights after batch
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tsetlin_rs::{Config, TsetlinMachine};
+    ///
+    /// let config = Config::builder().clauses(20).features(2).build().unwrap();
+    /// let mut tm = TsetlinMachine::new(config, 10);
+    ///
+    /// // Process mini-batches
+    /// let batch_x = vec![vec![0, 1], vec![1, 0]];
+    /// let batch_y = vec![1, 1];
+    /// tm.partial_fit_batch(&batch_x, &batch_y, 42, true);
+    /// ```
+    pub fn partial_fit_batch(
+        &mut self,
+        xs: &[Vec<u8>],
+        ys: &[u8],
+        seed: u64,
+        update_weights: bool
+    ) {
+        if xs.is_empty() || xs.len() != ys.len() {
+            return;
+        }
+
+        let mut rng = rng_from_seed(seed);
+        for (x, &y) in xs.iter().zip(ys) {
+            self.train_one(x, y, &mut rng);
+        }
+
+        if update_weights {
+            self.update_weights();
+        }
+    }
 }
 
 impl crate::model::TsetlinModel<Vec<u8>, u8> for TsetlinMachine {
@@ -566,5 +642,64 @@ mod tests {
 
         let votes = VotingModel::sum_votes(&tm, &vec![1, 0]);
         assert!(votes.is_finite());
+    }
+
+    #[test]
+    fn partial_fit_single_sample() {
+        let config = Config::builder().clauses(20).features(2).build().unwrap();
+        let mut tm = TsetlinMachine::new(config, 10);
+
+        tm.partial_fit(&[0, 1], 1, 42);
+        tm.partial_fit(&[1, 0], 1, 43);
+        tm.partial_fit(&[0, 0], 0, 44);
+        tm.partial_fit(&[1, 1], 0, 45);
+
+        let pred = tm.predict(&[0, 1]);
+        assert!(pred == 0 || pred == 1);
+    }
+
+    #[test]
+    fn partial_fit_batch_learning() {
+        let config = Config::builder().clauses(20).features(2).build().unwrap();
+        let mut tm = TsetlinMachine::new(config, 10);
+
+        let x = vec![vec![0, 0], vec![0, 1], vec![1, 0], vec![1, 1]];
+        let y = vec![0, 1, 1, 0];
+
+        for epoch in 0..100 {
+            tm.partial_fit_batch(&x, &y, 42 + epoch, true);
+        }
+
+        assert!(tm.evaluate(&x, &y) >= 0.5);
+    }
+
+    #[test]
+    fn partial_fit_empty_batch() {
+        let config = Config::builder().clauses(10).features(2).build().unwrap();
+        let mut tm = TsetlinMachine::new(config, 5);
+
+        tm.partial_fit_batch(&[], &[], 42, true);
+        assert_eq!(tm.clauses().len(), 10);
+    }
+
+    #[test]
+    fn partial_fit_streaming_simulation() {
+        let config = Config::builder().clauses(20).features(2).build().unwrap();
+        let mut tm = TsetlinMachine::new(config, 10);
+
+        let samples = [
+            (vec![0, 0], 0u8),
+            (vec![0, 1], 1),
+            (vec![1, 0], 1),
+            (vec![1, 1], 0)
+        ];
+
+        for (seed, (x, y)) in samples.iter().cycle().take(400).enumerate() {
+            tm.partial_fit(x, *y, seed as u64);
+        }
+
+        let x: Vec<Vec<u8>> = samples.iter().map(|(x, _)| x.clone()).collect();
+        let y: Vec<u8> = samples.iter().map(|(_, y)| *y).collect();
+        assert!(tm.evaluate(&x, &y) >= 0.5);
     }
 }
