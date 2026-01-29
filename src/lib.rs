@@ -92,7 +92,7 @@ pub use binary::{AdvancedOptions, TsetlinMachine};
 pub use bitplane::BitPlaneBank;
 pub use bitwise::{BitwiseClause, pack_batch, pack_input};
 pub use clause::Clause;
-pub use clause_bank::ClauseBank;
+pub use clause_bank::{ClauseBank, ClauseFilter, ClauseFilterStats};
 pub use config::{Config, ConfigBuilder};
 pub use convolutional::{ConvConfig, Convolutional};
 pub use error::{Error, Result};
