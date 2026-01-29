@@ -87,6 +87,9 @@ pub mod parallel_training;
 #[cfg(feature = "simd")]
 pub mod simd;
 
+#[cfg(feature = "gpu")]
+pub mod gpu;
+
 pub use automaton::Automaton;
 pub use binary::{AdvancedOptions, TsetlinMachine};
 pub use bitplane::BitPlaneBank;
