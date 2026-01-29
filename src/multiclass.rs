@@ -9,7 +9,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Clause, Config,
+    Clause, Config, Rule,
     feedback::{type_i, type_ii},
     utils::rng_from_seed
 };
@@ -208,6 +208,78 @@ impl MultiClass {
         for (x, &y) in xs.iter().zip(ys) {
             self.train_one(x, y, &mut rng);
         }
+    }
+
+    /// Extract learned rules for a specific class.
+    #[must_use]
+    pub fn rules_for_class(&self, class: usize) -> Vec<Rule> {
+        if class >= self.clauses.len() {
+            return Vec::new();
+        }
+        self.clauses[class].iter().map(Rule::from_clause).collect()
+    }
+
+    /// Extract all non-empty rules for a class (simplified view).
+    #[must_use]
+    pub fn active_rules_for_class(&self, class: usize) -> Vec<Rule> {
+        self.rules_for_class(class)
+            .into_iter()
+            .filter(|r| !r.is_empty())
+            .collect()
+    }
+
+    /// Explain prediction: returns (predicted_class, active_rules, votes).
+    #[must_use]
+    pub fn explain(&self, x: &[u8]) -> (usize, Vec<(Rule, f32)>, Vec<f32>) {
+        let votes = self.class_votes(x);
+        let predicted = self.predict(x);
+
+        // Get rules that fired for the predicted class
+        let mut active_rules = Vec::new();
+        for clause in &self.clauses[predicted] {
+            if clause.evaluate(x) {
+                let rule = Rule::from_clause(clause);
+                if !rule.is_empty() {
+                    active_rules.push((rule, clause.weight()));
+                }
+            }
+        }
+
+        // Sort by weight (most influential first)
+        active_rules.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+
+        (predicted, active_rules, votes)
+    }
+
+    /// Format explanation as human-readable string.
+    #[cfg(feature = "std")]
+    #[must_use]
+    pub fn explain_string(&self, x: &[u8], feature_names: &[&str]) -> String {
+        let (class, rules, votes) = self.explain(x);
+
+        let mut s = format!("Prediction: class {} (votes: {:.1})\n", class, votes[class]);
+        s.push_str("Active rules:\n");
+
+        for (rule, weight) in rules.iter().take(5) {
+            let mut parts = Vec::new();
+            for &i in &rule.included {
+                let name = feature_names.get(i).unwrap_or(&"?");
+                parts.push(format!("{}=1", name));
+            }
+            for &i in &rule.negated {
+                let name = feature_names.get(i).unwrap_or(&"?");
+                parts.push(format!("{}=0", name));
+            }
+            let sign = if rule.polarity == 1 { "+" } else { "-" };
+            s.push_str(&format!(
+                "  {} ({:.2}) {}\n",
+                sign,
+                weight,
+                parts.join(" ∧ ")
+            ));
+        }
+
+        s
     }
 }
 
