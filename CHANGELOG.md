@@ -9,6 +9,12 @@
 
 ## [0.3.4] - 2026-01-29
 
+### Added
+
+| Change | Author | Branch | Ref |
+|--------|--------|--------|-----|
+| add rule extraction and explanation for MultiClass | [@RAprogramm](https://github.com/RAprogramm) | `main` | [`cdf9f2d`](https://github.com/RAprogramm/tsetlin-rs/commit/cdf9f2d327fb38a082237678019e746853552ea6) |
+
 ### Changed
 
 | Change | Author | Branch | Ref |
