@@ -69,6 +69,9 @@ use serde::{Deserialize, Serialize};
 
 mod eval;
 mod feedback;
+mod filter;
+
+pub use filter::{ClauseFilter, ClauseFilterStats};
 
 #[cfg(test)]
 mod tests;
