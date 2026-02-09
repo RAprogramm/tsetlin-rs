@@ -29,7 +29,7 @@ rand = { version = "0.9", default-features = false, features = [
   "small_rng",
   "thread_rng",
 ] }
-rand_xoshiro = "0.7"
+rand_xoshiro = "0.8"
 smallvec = "1.15"
 
 [dependencies.serde]
