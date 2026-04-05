@@ -20,7 +20,7 @@ jobs:
       - run: cargo nextest run --features "parallel,serde" --profile ci
         continue-on-error: true
       - if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: target/nextest/ci/junit.xml
