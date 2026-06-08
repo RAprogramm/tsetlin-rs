@@ -19,7 +19,7 @@ jobs:
           shared-key: ubuntu-latest-stable
           save-if: false
       - run: cargo llvm-cov --features "parallel,serde" --lcov --output-path lcov.info
-      - uses: codecov/codecov-action@v6
+      - uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: lcov.info
